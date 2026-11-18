@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Crescent Moon & Star -->
+    <path
+        android:fillColor="#FFDF73"
+        android:pathData="M54,26 C57.87,26 61.46,27.14 64.48,29.11 C60.29,30.34 57.25,34.2 57.25,38.78 C57.25,43.37 60.29,47.23 64.48,48.45 C61.46,50.43 57.87,51.56 54,51.56 C42.95,51.56 34,42.61 34,31.56 C34,29.62 34.28,27.75 34.79,26 C38.5,23.5 45.5,26 54,26 Z" />
+    <path
+        android:fillColor="#FFDF73"
+        android:pathData="M66,35 L67.5,39 L71.5,39 L68.2,41.4 L69.5,45.4 L66,43 L62.5,45.4 L63.8,41.4 L60.5,39 L64.5,39 Z" />
+
+    <!-- Open Quran Book Pages -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,58 C46,54 36,55 28,59 L28,78 C36,74 46,73 54,77 Z" />
+    <path
+        android:fillColor="#F4FBF7"
+        android:pathData="M54,58 C62,54 72,55 80,59 L80,78 C72,74 62,73 54,77 Z" />
+    <!-- Book Spine & Details -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M53,57 L55,57 L55,78 L53,78 Z" />
+    <path
+        android:fillColor="#E6C86E"
+        android:pathData="M33,63 L49,60 L49,61.5 L33,64.5 Z" />
+    <path
+        android:fillColor="#E6C86E"
+        android:pathData="M33,67 L49,64 L49,65.5 L33,68.5 Z" />
+    <path
+        android:fillColor="#E6C86E"
+        android:pathData="M59,60 L75,63 L75,64.5 L59,61.5 Z" />
+    <path
+        android:fillColor="#E6C86E"
+        android:pathData="M59,64 L75,67 L75,68.5 L59,65.5 Z" />
+
+    <!-- Rehal (Wooden Stand) Base -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M38,76 L54,87 L70,76 L73,79 L54,92 L35,79 Z" />
+    <path
+        android:fillColor="#B38F24"
+        android:pathData="M43,84 L32,91 L35,93 L47,85 Z" />
+    <path
+        android:fillColor="#B38F24"
+        android:pathData="M65,84 L76,91 L73,93 L61,85 Z" />
+</vector>

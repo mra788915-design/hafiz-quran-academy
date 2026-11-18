@@ -1,0 +1,6 @@
+{
+  "name": "Hafiz Quran Academy",
+  "description": "Comprehensive Hafiz Quran Academy management system featuring Admin, Teacher, and Parent portals with student admissions, attendance, Quran memorization progress (Sabaq, Sabqi, Daur), monthly fee challans with 3 printable copies, Fee Sabilillah (FS), and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

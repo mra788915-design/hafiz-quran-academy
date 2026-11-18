@@ -1,0 +1,384 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user's role session binding verified against an Admin-issued AuthTicket. Clients submit FieldValue.serverTimestamp() for createdAt and updatedAt.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Portal user display name" },
+        "role": { "type": "string", "enum": ["ADMIN", "TEACHER", "PARENT"] },
+        "ticketHash": { "type": "string", "description": "64-char SHA-256 hex credential ticket hash" },
+        "academyId": { "type": "string", "description": "Academy identifier" },
+        "teacherId": { "type": "string", "description": "Linked Teacher ID when role is TEACHER" },
+        "assignedClassIds": { "type": "array", "description": "Bounded list of assigned class IDs" },
+        "linkedStudentIds": { "type": "array", "description": "Bounded list of linked student IDs" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "displayName", "role", "ticketHash", "academyId", "teacherId", "assignedClassIds", "linkedStudentIds", "createdAt", "updatedAt"]
+    },
+    "AcademyDirectory": {
+      "title": "AcademyDirectory",
+      "description": "Academy settings and bounded document ID directory for cross-portal live sync. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "academyName": { "type": "string" },
+        "easyPaisaNumber": { "type": "string" },
+        "jazzCashNumber": { "type": "string" },
+        "onlineAccountTitle": { "type": "string" },
+        "easyPaisaIban": { "type": "string" },
+        "classIds": { "type": "array" },
+        "teacherIds": { "type": "array" },
+        "studentIds": { "type": "array" },
+        "announcementIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["academyId", "adminUid", "academyName", "easyPaisaNumber", "jazzCashNumber", "onlineAccountTitle", "easyPaisaIban", "classIds", "teacherIds", "studentIds", "announcementIds", "createdAt", "updatedAt"]
+    },
+    "AuthTicket": {
+      "title": "AuthTicket",
+      "description": "Zero-PII SHA-256 credential verification ticket managed exclusively by Admin. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "ticketHash": { "type": "string" },
+        "accountId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "TEACHER", "PARENT"] },
+        "teacherId": { "type": "string" },
+        "assignedClassIds": { "type": "array" },
+        "linkedStudentIds": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ticketHash", "accountId", "academyId", "adminUid", "displayName", "role", "teacherId", "assignedClassIds", "linkedStudentIds", "isActive", "createdAt", "updatedAt"]
+    },
+    "AdminVaultAccount": {
+      "title": "AdminVaultAccount",
+      "description": "Confidential Admin-only credential vault storing Teacher and Parent usernames, passwords, and contact details. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "accountId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "TEACHER", "PARENT"] },
+        "teacherId": { "type": "string" },
+        "assignedClassIds": { "type": "string" },
+        "linkedStudentIds": { "type": "string" },
+        "ticketHash": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["accountId", "academyId", "adminUid", "name", "username", "password", "email", "phone", "role", "teacherId", "assignedClassIds", "linkedStudentIds", "ticketHash", "isActive", "createdAt", "updatedAt"]
+    },
+    "CloudClass": {
+      "title": "CloudClass",
+      "description": "Academy class or Halaqah record. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "name": { "type": "string" },
+        "section": { "type": "string" },
+        "roomNumber": { "type": "string" },
+        "capacity": { "type": "integer" },
+        "assignedTeacherId": { "type": "string" },
+        "assignedTeacherName": { "type": "string" },
+        "scheduleInfo": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "studentIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["classId", "academyId", "adminUid", "name", "section", "roomNumber", "capacity", "assignedTeacherId", "assignedTeacherName", "scheduleInfo", "isActive", "studentIds", "createdAt", "updatedAt"]
+    },
+    "CloudTeacher": {
+      "title": "CloudTeacher",
+      "description": "Teacher profile record restricted to Admin and the Teacher themselves. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "teacherId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "contactNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "assignedClasses": { "type": "string" },
+        "assignedClassIds": { "type": "string" },
+        "joiningDate": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teacherId", "academyId", "adminUid", "fullName", "contactNumber", "email", "address", "assignedClasses", "assignedClassIds", "joiningDate", "isActive", "notes", "createdAt", "updatedAt"]
+    },
+    "CloudStudent": {
+      "title": "CloudStudent",
+      "description": "Enrolled student profile with bounded IDs for attendance, progress, challans, and payments. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "fullName": { "type": "string" },
+        "guardianName": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "admissionDate": { "type": "string" },
+        "gender": { "type": "string" },
+        "contactNumber": { "type": "string" },
+        "alternateContact": { "type": "string" },
+        "address": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "quranLevel": { "type": "string" },
+        "monthlyFee": { "type": "number" },
+        "feeCategory": { "type": "string" },
+        "isFsEligible": { "type": "boolean" },
+        "fsStatus": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "COMPLETED", "INACTIVE", "WITHDRAWN"] },
+        "notes": { "type": "string" },
+        "completedCourse": { "type": "string" },
+        "completionDate": { "type": "string" },
+        "certificateNumber": { "type": "string" },
+        "finalGrade": { "type": "string" },
+        "certificateRemarks": { "type": "string" },
+        "recentAttendanceIds": { "type": "array" },
+        "recentProgressIds": { "type": "array" },
+        "recentChallanIds": { "type": "array" },
+        "recentPaymentIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "academyId", "adminUid", "admissionNumber", "fullName", "guardianName", "dateOfBirth", "admissionDate", "gender", "contactNumber", "alternateContact", "address", "classId", "className", "teacherId", "teacherName", "quranLevel", "monthlyFee", "feeCategory", "isFsEligible", "fsStatus", "status", "notes", "completedCourse", "completionDate", "certificateNumber", "finalGrade", "certificateRemarks", "recentAttendanceIds", "recentProgressIds", "recentChallanIds", "recentPaymentIds", "createdAt", "updatedAt"]
+    },
+    "CloudAttendance": {
+      "title": "CloudAttendance",
+      "description": "Daily student attendance record. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "attendanceId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "date": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["PRESENT", "ABSENT", "LATE", "LEAVE"] },
+        "remarks": { "type": "string" },
+        "markedByTeacherId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["attendanceId", "academyId", "adminUid", "date", "classId", "className", "studentId", "studentName", "admissionNumber", "status", "remarks", "markedByTeacherId", "createdAt", "updatedAt"]
+    },
+    "CloudQuranProgress": {
+      "title": "CloudQuranProgress",
+      "description": "Daily Sabaq, Sabqi, and Manzil Quran progress record. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "progressId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "date": { "type": "string" },
+        "classId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "surahName": { "type": "string" },
+        "surahNumber": { "type": "integer" },
+        "juzNumber": { "type": "integer" },
+        "sabaqAyatStart": { "type": "integer" },
+        "sabaqAyatEnd": { "type": "integer" },
+        "sabaqRating": { "type": "string", "enum": ["EXCELLENT", "VERY_GOOD", "GOOD", "AVERAGE", "NEEDS_REVISION"] },
+        "sabqiSummary": { "type": "string" },
+        "manzilSummary": { "type": "string" },
+        "mistakesCount": { "type": "integer" },
+        "teacherRemarks": { "type": "string" },
+        "nextTarget": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["progressId", "academyId", "adminUid", "date", "classId", "studentId", "studentName", "admissionNumber", "teacherId", "teacherName", "surahName", "surahNumber", "juzNumber", "sabaqAyatStart", "sabaqAyatEnd", "sabaqRating", "sabqiSummary", "manzilSummary", "mistakesCount", "teacherRemarks", "nextTarget", "createdAt", "updatedAt"]
+    },
+    "CloudFeeChallan": {
+      "title": "CloudFeeChallan",
+      "description": "Monthly student fee challan record. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "challanId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "challanNumber": { "type": "string" },
+        "studentId": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "studentName": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "billingMonth": { "type": "string" },
+        "billingYear": { "type": "integer" },
+        "issueDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "monthlyTuitionFee": { "type": "number" },
+        "additionalCharges": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "fsAssistanceAmount": { "type": "number" },
+        "previousBalance": { "type": "number" },
+        "totalPayable": { "type": "number" },
+        "amountPaid": { "type": "number" },
+        "remainingBalance": { "type": "number" },
+        "status": { "type": "string", "enum": ["UNPAID", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED"] },
+        "paymentDate": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "transactionRef": { "type": "string" },
+        "remarks": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["challanId", "academyId", "adminUid", "challanNumber", "studentId", "admissionNumber", "studentName", "classId", "className", "billingMonth", "billingYear", "issueDate", "dueDate", "monthlyTuitionFee", "additionalCharges", "discountAmount", "fsAssistanceAmount", "previousBalance", "totalPayable", "amountPaid", "remainingBalance", "status", "paymentDate", "paymentMethod", "transactionRef", "remarks", "createdAt", "updatedAt"]
+    },
+    "CloudFeePayment": {
+      "title": "CloudFeePayment",
+      "description": "Fee payment receipt and online TID ledger record. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "challanId": { "type": "string" },
+        "challanNumber": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentDate": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "receiptNumber": { "type": "string" },
+        "receivedBy": { "type": "string" },
+        "remarks": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["paymentId", "academyId", "adminUid", "challanId", "challanNumber", "studentId", "studentName", "amount", "paymentDate", "paymentMethod", "receiptNumber", "receivedBy", "remarks", "createdAt", "updatedAt"]
+    },
+    "CloudFsRecord": {
+      "title": "CloudFsRecord",
+      "description": "Confidential Fee Sabilillah assistance record accessible exclusively by Admin. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "fsId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "className": { "type": "string" },
+        "category": { "type": "string" },
+        "assistanceType": { "type": "string", "enum": ["FULL", "PARTIAL"] },
+        "approvedAmount": { "type": "number" },
+        "effectiveStartDate": { "type": "string" },
+        "effectiveEndDate": { "type": "string" },
+        "approvalStatus": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "approverName": { "type": "string" },
+        "approvalDate": { "type": "string" },
+        "confidentialRemarks": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fsId", "academyId", "adminUid", "studentId", "studentName", "admissionNumber", "className", "category", "assistanceType", "approvedAmount", "effectiveStartDate", "effectiveEndDate", "approvalStatus", "approverName", "approvalDate", "confidentialRemarks", "createdAt", "updatedAt"]
+    },
+    "CloudAnnouncement": {
+      "title": "CloudAnnouncement",
+      "description": "Academy-wide or role-targeted announcement. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "announcementId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "targetRole": { "type": "string", "enum": ["All", "Teachers", "Parents"] },
+        "date": { "type": "string" },
+        "priority": { "type": "string", "enum": ["Normal", "High", "Urgent"] },
+        "authorName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["announcementId", "academyId", "adminUid", "title", "content", "targetRole", "date", "priority", "authorName", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Per-user session and server-verified role binding."
+    },
+    "/academies/{academyId}": {
+      "schema": "AcademyDirectory",
+      "description": "Academy settings and bounded entity ID index."
+    },
+    "/auth_tickets/{ticketHash}": {
+      "schema": "AuthTicket",
+      "description": "Zero-PII SHA-256 credential verification tickets."
+    },
+    "/admin_vault/{accountId}": {
+      "schema": "AdminVaultAccount",
+      "description": "Admin-only credential and contact vault."
+    },
+    "/classes/{classId}": {
+      "schema": "CloudClass",
+      "description": "Academy classes and Halaqahs."
+    },
+    "/teachers/{teacherId}": {
+      "schema": "CloudTeacher",
+      "description": "Academy teacher profiles."
+    },
+    "/students/{studentId}": {
+      "schema": "CloudStudent",
+      "description": "Enrolled student profiles."
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "CloudAttendance",
+      "description": "Daily student attendance records."
+    },
+    "/quran_progress/{progressId}": {
+      "schema": "CloudQuranProgress",
+      "description": "Daily Quran Sabaq, Sabqi, and Manzil progress records."
+    },
+    "/fee_challans/{challanId}": {
+      "schema": "CloudFeeChallan",
+      "description": "Monthly fee challans."
+    },
+    "/fee_payments/{paymentId}": {
+      "schema": "CloudFeePayment",
+      "description": "Fee payment receipts and online TID submissions."
+    },
+    "/fs_records/{fsId}": {
+      "schema": "CloudFsRecord",
+      "description": "Confidential Fee Sabilillah assistance records."
+    },
+    "/announcements/{announcementId}": {
+      "schema": "CloudAnnouncement",
+      "description": "Academy announcements."
+    }
+  }
+}
