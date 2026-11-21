@@ -367,13 +367,110 @@ object FirestoreAcademySeeder {
         db.collection("teachers").document(t2.id)
             .set(FirestoreCloudMappers.buildTeacherPayload(t2, adminUid)).await()
 
-        // 3. Create students (before attendance, progress, challans which verify exists(students/...))
+        val ex1 = AcademyExam(
+            id = "exm_hifz1_test",
+            title = "Monthly Tajweed & Sabaq Test",
+            examType = ExamType.TEST,
+            subjectName = "Hifz Sabaq & Tajweed Rules",
+            classId = c1.id,
+            className = c1.name,
+            academicTerm = "2026-2027",
+            examDate = today,
+            totalMarks = 50.0,
+            passingMarks = 20.0,
+            instructions = "Assess daily Sabaq fluency, Ghunnah, and Makharij accuracy.",
+            createdByAdminName = "Nazim-e-Aala"
+        )
+        val ex2 = AcademyExam(
+            id = "exm_hifz1_mid",
+            title = "Mid-Term Hifz Evaluation 2026",
+            examType = ExamType.MID_EXAM,
+            subjectName = "5 Juz Sabqi & Manzil Examination",
+            classId = c1.id,
+            className = c1.name,
+            academicTerm = "2026-2027",
+            examDate = today,
+            totalMarks = 100.0,
+            passingMarks = 40.0,
+            instructions = "Comprehensive mid-term oral examination covering assigned Juz.",
+            createdByAdminName = "Nazim-e-Aala"
+        )
+
+        val mk1 = ExamMarkRecord(
+            id = "mark_${ex1.id}_${s1.id}",
+            examId = ex1.id,
+            examTitle = ex1.title,
+            examType = ex1.examType,
+            subjectName = ex1.subjectName,
+            examDate = ex1.examDate,
+            academicTerm = ex1.academicTerm,
+            classId = c1.id,
+            className = c1.name,
+            studentId = s1.id,
+            studentName = s1.fullName,
+            admissionNumber = s1.admissionNumber,
+            obtainedMarks = 47.0,
+            totalMarks = ex1.totalMarks,
+            passingMarks = ex1.passingMarks,
+            grade = ExamGradeHelper.computeGrade(47.0, ex1.totalMarks, ex1.passingMarks, false),
+            isAbsent = false,
+            remarks = "MashaAllah excellent Tajweed and fluent recitation.",
+            gradedByTeacherId = t1.id,
+            gradedByTeacherName = t1.fullName
+        )
+        val mk2 = ExamMarkRecord(
+            id = "mark_${ex1.id}_${s4.id}",
+            examId = ex1.id,
+            examTitle = ex1.title,
+            examType = ex1.examType,
+            subjectName = ex1.subjectName,
+            examDate = ex1.examDate,
+            academicTerm = ex1.academicTerm,
+            classId = c1.id,
+            className = c1.name,
+            studentId = s4.id,
+            studentName = s4.fullName,
+            admissionNumber = s4.admissionNumber,
+            obtainedMarks = 44.0,
+            totalMarks = ex1.totalMarks,
+            passingMarks = ex1.passingMarks,
+            grade = ExamGradeHelper.computeGrade(44.0, ex1.totalMarks, ex1.passingMarks, false),
+            isAbsent = false,
+            remarks = "Very good performance.",
+            gradedByTeacherId = t1.id,
+            gradedByTeacherName = t1.fullName
+        )
+        val mk3 = ExamMarkRecord(
+            id = "mark_${ex2.id}_${s1.id}",
+            examId = ex2.id,
+            examTitle = ex2.title,
+            examType = ex2.examType,
+            subjectName = ex2.subjectName,
+            examDate = ex2.examDate,
+            academicTerm = ex2.academicTerm,
+            classId = c1.id,
+            className = c1.name,
+            studentId = s1.id,
+            studentName = s1.fullName,
+            admissionNumber = s1.admissionNumber,
+            obtainedMarks = 92.0,
+            totalMarks = ex2.totalMarks,
+            passingMarks = ex2.passingMarks,
+            grade = ExamGradeHelper.computeGrade(92.0, ex2.totalMarks, ex2.passingMarks, false),
+            isAbsent = false,
+            remarks = "Outstanding memorization stability across Juz.",
+            gradedByTeacherId = t1.id,
+            gradedByTeacherName = t1.fullName
+        )
+
+        // 3. Create students (before attendance, progress, challans, exam_marks which verify exists(students/...))
         db.collection("students").document(s1.id).set(
             FirestoreCloudMappers.buildStudentPayload(
                 s1, adminUid,
                 recentAttIds = listOf(att1.id),
                 recentProgIds = listOf(p1.id),
-                recentChallanIds = listOf(ch1.id)
+                recentChallanIds = listOf(ch1.id),
+                recentExamMarkIds = listOf(mk1.id, mk3.id)
             )
         ).await()
         db.collection("students").document(s2.id).set(
@@ -392,11 +489,12 @@ object FirestoreAcademySeeder {
         db.collection("students").document(s4.id).set(
             FirestoreCloudMappers.buildStudentPayload(
                 s4, adminUid,
-                recentAttIds = listOf(att2.id)
+                recentAttIds = listOf(att2.id),
+                recentExamMarkIds = listOf(mk2.id)
             )
         ).await()
 
-        // 4. Create attendance, progress, challans, fs_records, announcements, tickets & vault
+        // 4. Create attendance, progress, challans, fs_records, announcements, exams, marks, tickets & vault
         val batch = db.batch()
         batch.set(db.collection("attendance").document(att1.id), FirestoreCloudMappers.buildAttendancePayload(att1, adminUid))
         batch.set(db.collection("attendance").document(att2.id), FirestoreCloudMappers.buildAttendancePayload(att2, adminUid))
@@ -410,6 +508,12 @@ object FirestoreAcademySeeder {
 
         batch.set(db.collection("fs_records").document(fs1.id), FirestoreCloudMappers.buildFsPayload(fs1, adminUid))
         batch.set(db.collection("announcements").document(ann1.id), FirestoreCloudMappers.buildAnnouncementPayload(ann1, adminUid))
+
+        batch.set(db.collection("exams").document(ex1.id), FirestoreCloudMappers.buildExamPayload(ex1, adminUid))
+        batch.set(db.collection("exams").document(ex2.id), FirestoreCloudMappers.buildExamPayload(ex2, adminUid))
+        batch.set(db.collection("exam_marks").document(mk1.id), FirestoreCloudMappers.buildExamMarkPayload(mk1, adminUid))
+        batch.set(db.collection("exam_marks").document(mk2.id), FirestoreCloudMappers.buildExamMarkPayload(mk2, adminUid))
+        batch.set(db.collection("exam_marks").document(mk3.id), FirestoreCloudMappers.buildExamMarkPayload(mk3, adminUid))
 
         for (acc in accounts) {
             val (ticketHash, ticketPayload) = FirestoreCloudMappers.buildAuthTicketPayload(acc, adminUid)
@@ -430,6 +534,7 @@ object FirestoreAcademySeeder {
             "teacherIds" to listOf(t1.id, t2.id),
             "studentIds" to listOf(s1.id, s2.id, s3.id, s4.id),
             "announcementIds" to listOf(ann1.id),
+            "examIds" to listOf(ex1.id, ex2.id),
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )

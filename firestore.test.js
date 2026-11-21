@@ -930,4 +930,362 @@ test("Academy Owner (academies.adminUid): can recover/reset Admin auth_ticket an
   );
 });
 
+// 11. Namaz Logs & Madni Qaida Logs CRUD (Admin & Assigned Teacher write; Parent read-only; Cross-Teacher & Parent write denied)
+test("Assigned Teacher & Admin: full CRUD on namaz_logs and madni_qaida_logs; Parent read-only & cross-teacher denied", async () => {
+  await seedAcademyFixture();
+  const adminDb = testEnv.authenticatedContext(ADMIN_UID).firestore();
+  const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore();
+  const parentDb = testEnv.authenticatedContext(PARENT_UID).firestore();
+  const otherParentDb = testEnv.authenticatedContext(OTHER_PARENT_UID).firestore();
+  const now = new Date();
 
+  // Teacher creates Namaz log + updates student.recentNamazIds
+  await assertSucceeds(
+    teacherDb.collection("namaz_logs").doc("namaz_01").set({
+      logId: "namaz_01",
+      academyId: ACADEMY_ID,
+      adminUid: ADMIN_UID,
+      date: "2026-10-26",
+      classId: CLASS_1_ID,
+      studentId: STUDENT_1_ID,
+      studentName: "Muhammad Bilal Farooq",
+      admissionNumber: "HQA-26-0101",
+      teacherId: "tchr_1",
+      teacherName: "Qari Abdullah",
+      prayerName: "Zuhr",
+      duaOrSurahTopic: "Sana & Tashahhud",
+      rating: "EXCELLENT",
+      wuduAndPostureNotes: "Proper Wudu & Qiyam",
+      teacherRemarks: "Very attentive",
+      nextTarget: "Dua-e-Qunoot",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(
+    teacherDb.collection("students").doc(STUDENT_1_ID).update({
+      recentNamazIds: ["namaz_01"],
+      updatedAt: now,
+    })
+  );
+
+  // Linked Parent can read child's Namaz log, Other Parent denied, Parent cannot write
+  await assertSucceeds(parentDb.collection("namaz_logs").doc("namaz_01").get());
+  await assertFails(otherParentDb.collection("namaz_logs").doc("namaz_01").get());
+  await assertFails(
+    parentDb.collection("namaz_logs").doc("namaz_01").update({
+      rating: "MISSED",
+      updatedAt: new Date(),
+    })
+  );
+
+  // Teacher creates Madni Qaida log + updates student.recentQaidaIds, edits it, Admin can delete
+  await assertSucceeds(
+    teacherDb.collection("madni_qaida_logs").doc("qaida_01").set({
+      logId: "qaida_01",
+      academyId: ACADEMY_ID,
+      adminUid: ADMIN_UID,
+      date: "2026-10-26",
+      classId: CLASS_1_ID,
+      studentId: STUDENT_1_ID,
+      studentName: "Muhammad Bilal Farooq",
+      admissionNumber: "HQA-26-0101",
+      teacherId: "tchr_1",
+      teacherName: "Qari Abdullah",
+      lessonNumber: 6,
+      lessonTitle: "Lesson 6: Harkat & Tanween",
+      pageNumber: 14,
+      linesCovered: "Lines 1-6",
+      rating: "VERY_GOOD",
+      revisionSummary: "Lesson 5 good",
+      mistakesCount: 1,
+      teacherRemarks: "Makharij clear",
+      nextTarget: "Page 15 full",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(
+    teacherDb.collection("students").doc(STUDENT_1_ID).update({
+      recentQaidaIds: ["qaida_01"],
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(
+    teacherDb.collection("madni_qaida_logs").doc("qaida_01").update({
+      mistakesCount: 0,
+      rating: "EXCELLENT",
+      updatedAt: new Date(),
+    })
+  );
+
+  await assertSucceeds(parentDb.collection("madni_qaida_logs").doc("qaida_01").get());
+  await assertFails(otherParentDb.collection("madni_qaida_logs").doc("qaida_01").get());
+
+  await assertSucceeds(teacherDb.collection("namaz_logs").doc("namaz_01").delete());
+  await assertSucceeds(adminDb.collection("madni_qaida_logs").doc("qaida_01").delete());
+});
+
+// 12. Leave Requests: Parent Submit -> Teacher/Admin Approve/Reject -> Terminal State Lock
+test("Leave Requests: Parent can submit PENDING leave; Teacher/Admin can approve; self-approve and cross-parent denied", async () => {
+  await seedAcademyFixture();
+  const adminDb = testEnv.authenticatedContext(ADMIN_UID).firestore();
+  const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore();
+  const parentDb = testEnv.authenticatedContext(PARENT_UID).firestore();
+  const otherParentDb = testEnv.authenticatedContext(OTHER_PARENT_UID).firestore();
+  const now = new Date();
+
+  // Parent CANNOT self-approve on create
+  await assertFails(
+    parentDb.collection("leave_requests").doc("leave_forged_1").set({
+      leaveId: "leave_forged_1",
+      academyId: ACADEMY_ID,
+      adminUid: ADMIN_UID,
+      studentId: STUDENT_1_ID,
+      studentName: "Muhammad Bilal Farooq",
+      admissionNumber: "HQA-26-0101",
+      classId: CLASS_1_ID,
+      className: "Hifz Halaqah 1",
+      teacherId: "tchr_1",
+      parentUid: PARENT_UID,
+      parentName: "Farooq Ahmed",
+      leaveType: "Sick / Medical",
+      fromDate: "2026-10-27",
+      toDate: "2026-10-28",
+      reason: "Fever",
+      status: "APPROVED",
+      reviewerName: "Fake",
+      reviewerRole: "TEACHER",
+      reviewedDate: "2026-10-27",
+      reviewerRemarks: "",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  // Parent submits valid PENDING leave request & attaches ID to student.recentLeaveIds
+  await assertSucceeds(
+    parentDb.collection("leave_requests").doc("leave_01").set({
+      leaveId: "leave_01",
+      academyId: ACADEMY_ID,
+      adminUid: ADMIN_UID,
+      studentId: STUDENT_1_ID,
+      studentName: "Muhammad Bilal Farooq",
+      admissionNumber: "HQA-26-0101",
+      classId: CLASS_1_ID,
+      className: "Hifz Halaqah 1",
+      teacherId: "tchr_1",
+      parentUid: PARENT_UID,
+      parentName: "Farooq Ahmed",
+      leaveType: "Sick / Medical",
+      fromDate: "2026-10-27",
+      toDate: "2026-10-28",
+      reason: "High fever and doctor visit",
+      status: "PENDING",
+      reviewerName: "",
+      reviewerRole: "",
+      reviewedDate: "",
+      reviewerRemarks: "",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+
+  await assertSucceeds(
+    parentDb.collection("students").doc(STUDENT_1_ID).update({
+      recentLeaveIds: ["leave_01"],
+      updatedAt: now,
+    })
+  );
+
+  // Parent can list own leave requests; Other Parent cannot read
+  await assertSucceeds(
+    parentDb.collection("leave_requests").where("parentUid", "==", PARENT_UID).get()
+  );
+  await assertFails(otherParentDb.collection("leave_requests").doc("leave_01").get());
+
+  // Teacher approves PENDING leave
+  await assertSucceeds(
+    teacherDb.collection("leave_requests").doc("leave_01").update({
+      status: "APPROVED",
+      reviewerName: "Qari Abdullah",
+      reviewerRole: "TEACHER",
+      reviewedDate: "2026-10-27",
+      reviewerRemarks: "Get well soon InshaAllah",
+      updatedAt: new Date(),
+    })
+  );
+
+  // Terminal state lock: Teacher cannot mutate once APPROVED, and Parent cannot delete once APPROVED
+  await assertFails(
+    teacherDb.collection("leave_requests").doc("leave_01").update({
+      status: "REJECTED",
+      updatedAt: new Date(),
+    })
+  );
+  await assertFails(parentDb.collection("leave_requests").doc("leave_01").delete());
+
+  // Admin can delete any leave request, and Parent can cancel a PENDING one
+  await assertSucceeds(
+    parentDb.collection("leave_requests").doc("leave_02").set({
+      leaveId: "leave_02",
+      academyId: ACADEMY_ID,
+      adminUid: ADMIN_UID,
+      studentId: STUDENT_1_ID,
+      studentName: "Muhammad Bilal Farooq",
+      admissionNumber: "HQA-26-0101",
+      classId: CLASS_1_ID,
+      className: "Hifz Halaqah 1",
+      teacherId: "tchr_1",
+      parentUid: PARENT_UID,
+      parentName: "Farooq Ahmed",
+      leaveType: "Family Emergency",
+      fromDate: "2026-10-29",
+      toDate: "2026-10-29",
+      reason: "Urgent family travel",
+      status: "PENDING",
+      reviewerName: "",
+      reviewerRole: "",
+      reviewedDate: "",
+      reviewerRemarks: "",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+  await assertSucceeds(parentDb.collection("leave_requests").doc("leave_02").delete());
+  await assertSucceeds(adminDb.collection("leave_requests").doc("leave_01").delete());
+});
+
+test("Exams management: Admin CRUD; Teacher upload/update marks ONLY (no exam CRUD & no delete); Parent read own child only", async () => {
+  await seedAcademyFixture();
+
+  const adminDb = testEnv.authenticatedContext(ADMIN_UID, { email: "mra788915@gmail.com", email_verified: true }).firestore();
+  const teacherDb = testEnv.authenticatedContext(TEACHER_UID).firestore();
+  const parentDb = testEnv.authenticatedContext(PARENT_UID).firestore();
+  const otherParentDb = testEnv.authenticatedContext(OTHER_PARENT_UID).firestore();
+  const now = new Date();
+
+  const validExam = {
+    examId: "exm_final_1",
+    academyId: ACADEMY_ID,
+    adminUid: ADMIN_UID,
+    title: "Annual Final Hifz Exam",
+    examType: "FINAL_EXAM",
+    subjectName: "Complete Hifz & Tajweed",
+    classId: CLASS_1_ID,
+    className: "Hifz Halaqah 1",
+    academicTerm: "2026-2027",
+    examDate: "2026-12-15",
+    totalMarks: 100,
+    passingMarks: 40,
+    instructions: "Oral & Tajweed final evaluation.",
+    createdByAdminName: "Nazim-e-Aala",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // Teacher & Parent CANNOT create/edit/delete exams
+  await assertFails(teacherDb.collection("exams").doc("exm_teacher_fake").set({ ...validExam, examId: "exm_teacher_fake" }));
+  await assertFails(parentDb.collection("exams").doc("exm_parent_fake").set({ ...validExam, examId: "exm_parent_fake" }));
+
+  // Admin creates exam & links to directory
+  await assertSucceeds(adminDb.collection("exams").doc("exm_final_1").set(validExam));
+  await assertSucceeds(adminDb.collection("academies").doc(ACADEMY_ID).update({ examIds: ["exm_final_1"], updatedAt: now }));
+
+  // Teacher & Parent CAN read exam
+  await assertSucceeds(teacherDb.collection("exams").doc("exm_final_1").get());
+  await assertSucceeds(parentDb.collection("exams").doc("exm_final_1").get());
+
+  // Teacher CANNOT update or delete Admin's exam
+  await assertFails(teacherDb.collection("exams").doc("exm_final_1").update({ totalMarks: 200, updatedAt: new Date() }));
+  await assertFails(teacherDb.collection("exams").doc("exm_final_1").delete());
+
+  const validMark = {
+    markId: "mark_exm_final_1_std_1",
+    academyId: ACADEMY_ID,
+    adminUid: ADMIN_UID,
+    examId: "exm_final_1",
+    examTitle: "Annual Final Hifz Exam",
+    examType: "FINAL_EXAM",
+    subjectName: "Complete Hifz & Tajweed",
+    examDate: "2026-12-15",
+    academicTerm: "2026-2027",
+    classId: CLASS_1_ID,
+    className: "Hifz Halaqah 1",
+    studentId: STUDENT_1_ID,
+    studentName: "Muhammad Bilal Farooq",
+    admissionNumber: "HQA-26-0101",
+    obtainedMarks: 94,
+    totalMarks: 100,
+    passingMarks: 40,
+    grade: "A+ (Mumtaz)",
+    isAbsent: false,
+    remarks: "MashaAllah top position.",
+    gradedByTeacherId: "tchr_1",
+    gradedByTeacherName: "Qari Abdullah",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // Teacher CANNOT upload mark for unassigned class
+  await assertFails(
+    teacherDb.collection("exam_marks").doc("mark_exm_final_1_std_2").set({
+      ...validMark,
+      markId: "mark_exm_final_1_std_2",
+      classId: CLASS_2_ID,
+      studentId: STUDENT_2_ID,
+    })
+  );
+
+  // Assigned Teacher CAN upload mark for CLASS_1_ID & attach ID to student.recentExamMarkIds
+  await assertSucceeds(teacherDb.collection("exam_marks").doc("mark_exm_final_1_std_1").set(validMark));
+  await assertSucceeds(
+    teacherDb.collection("students").doc(STUDENT_1_ID).update({
+      recentExamMarkIds: ["mark_exm_final_1_std_1"],
+      updatedAt: now,
+    })
+  );
+
+  // Assigned Teacher CAN update marks fields ONLY
+  await assertSucceeds(
+    teacherDb.collection("exam_marks").doc("mark_exm_final_1_std_1").update({
+      obtainedMarks: 96,
+      grade: "A+ (Mumtaz)",
+      remarks: "Revised after Tajweed verification",
+      updatedAt: new Date(),
+    })
+  );
+
+  // Teacher CANNOT exceed totalMarks, alter totalMarks, or delete exam_marks
+  await assertFails(
+    teacherDb.collection("exam_marks").doc("mark_exm_final_1_std_1").update({
+      obtainedMarks: 150,
+      updatedAt: new Date(),
+    })
+  );
+  await assertFails(
+    teacherDb.collection("exam_marks").doc("mark_exm_final_1_std_1").update({
+      totalMarks: 200,
+      updatedAt: new Date(),
+    })
+  );
+  await assertFails(teacherDb.collection("exam_marks").doc("mark_exm_final_1_std_1").delete());
+
+  // Linked Parent CAN read own child mark, CANNOT read other child mark, CANNOT write marks
+  await assertSucceeds(parentDb.collection("exam_marks").doc("mark_exm_final_1_std_1").get());
+  await assertFails(otherParentDb.collection("exam_marks").doc("mark_exm_final_1_std_1").get());
+  await assertFails(
+    parentDb.collection("exam_marks").doc("mark_exm_final_1_std_1").update({
+      obtainedMarks: 100,
+      updatedAt: new Date(),
+    })
+  );
+
+  // Admin CAN update exam and delete mark & exam
+  await assertSucceeds(adminDb.collection("exams").doc("exm_final_1").update({ title: "Annual Final Hifz Exam (Updated)", updatedAt: new Date() }));
+  await assertSucceeds(adminDb.collection("exam_marks").doc("mark_exm_final_1_std_1").delete());
+  await assertSucceeds(adminDb.collection("exams").doc("exm_final_1").delete());
+});

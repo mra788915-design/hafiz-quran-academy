@@ -51,6 +51,46 @@ enum class QuranProgressRating {
     NEEDS_REVISION
 }
 
+enum class NamazProgressRating {
+    EXCELLENT,
+    MEMORIZED,
+    PRACTICED_GOOD,
+    NEEDS_CORRECTION,
+    MISSED
+}
+
+enum class ExamType(val displayLabel: String, val shortLabel: String) {
+    TEST("Test / Monthly Quiz", "Test"),
+    MID_EXAM("Mid-Term Exam", "Mid Exam"),
+    FINAL_EXAM("Final-Term Exam", "Final Exam")
+}
+
+object ExamGradeHelper {
+    fun computePercentage(obtainedMarks: Double, totalMarks: Double): Double {
+        if (totalMarks <= 0.0) return 0.0
+        return ((obtainedMarks / totalMarks) * 100.0).coerceIn(0.0, 100.0)
+    }
+
+    fun computeGrade(
+        obtainedMarks: Double,
+        totalMarks: Double,
+        passingMarks: Double,
+        isAbsent: Boolean
+    ): String {
+        if (isAbsent) return "AB (Absent)"
+        val pct = computePercentage(obtainedMarks, totalMarks)
+        val passed = obtainedMarks >= passingMarks
+        if (!passed) return "F (Fail)"
+        return when {
+            pct >= 90.0 -> "A+ (Mumtaz)"
+            pct >= 80.0 -> "A (Jayyid Jiddan)"
+            pct >= 70.0 -> "B (Jayyid)"
+            pct >= 60.0 -> "C (Maqbool)"
+            else -> "D (Pass)"
+        }
+    }
+}
+
 @Entity(tableName = "users")
 data class UserAccount(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -165,6 +205,69 @@ data class QuranProgressRecord(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "namaz_logs")
+data class NamazLogRecord(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val date: String, // YYYY-MM-DD
+    val studentId: String,
+    val studentName: String,
+    val admissionNumber: String,
+    val teacherId: String = "",
+    val teacherName: String = "",
+    val prayerName: String, // e.g., "Fajr", "Zuhr", "Asr", "Maghrib", "Isha", "5 Prayers Check"
+    val duaOrSurahTopic: String = "", // e.g., "Sana & Tashahhud", "Dua-e-Qunoot"
+    val rating: NamazProgressRating = NamazProgressRating.PRACTICED_GOOD,
+    val wuduAndPostureNotes: String = "Proper Wudu, Ruku & Sajdah",
+    val teacherRemarks: String = "",
+    val nextTarget: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "madni_qaida_logs")
+data class MadniQaidaLogRecord(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val date: String, // YYYY-MM-DD
+    val studentId: String,
+    val studentName: String,
+    val admissionNumber: String,
+    val teacherId: String = "",
+    val teacherName: String = "",
+    val lessonNumber: Int = 1, // Lesson 1 to 26
+    val lessonTitle: String, // e.g., "Lesson 1: Huroof-e-Mufridat"
+    val pageNumber: Int = 1,
+    val linesCovered: String = "Lines 1-6",
+    val rating: QuranProgressRating = QuranProgressRating.GOOD,
+    val revisionSummary: String = "", // Previous lesson / Dohrai
+    val mistakesCount: Int = 0,
+    val teacherRemarks: String = "",
+    val nextTarget: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "leave_requests")
+data class LeaveRequest(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val studentId: String,
+    val studentName: String,
+    val admissionNumber: String,
+    val classId: String,
+    val className: String,
+    val teacherId: String = "",
+    val parentUid: String = "",
+    val parentName: String = "",
+    val leaveType: String = "Sick / Medical",
+    val fromDate: String, // YYYY-MM-DD
+    val toDate: String, // YYYY-MM-DD
+    val reason: String,
+    val status: ApprovalStatus = ApprovalStatus.PENDING,
+    val reviewerName: String = "",
+    val reviewerRole: String = "",
+    val reviewedDate: String = "",
+    val reviewerRemarks: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
 @Entity(tableName = "fee_challans")
 data class FeeChallan(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -253,12 +356,55 @@ data class ScheduleItem(
     val teacherName: String
 )
 
+@Entity(tableName = "exams")
+data class AcademyExam(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val examType: ExamType = ExamType.TEST,
+    val subjectName: String = "Hifz / Nazra & Tajweed",
+    val classId: String,
+    val className: String,
+    val academicTerm: String = "2026-2027",
+    val examDate: String, // YYYY-MM-DD
+    val totalMarks: Double = 100.0,
+    val passingMarks: Double = 40.0,
+    val instructions: String = "",
+    val createdByAdminName: String = "Administration",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "exam_marks")
+data class ExamMarkRecord(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val examId: String,
+    val examTitle: String,
+    val examType: ExamType = ExamType.TEST,
+    val subjectName: String = "",
+    val examDate: String,
+    val academicTerm: String = "2026-2027",
+    val classId: String,
+    val className: String,
+    val studentId: String,
+    val studentName: String,
+    val admissionNumber: String,
+    val obtainedMarks: Double = 0.0,
+    val totalMarks: Double = 100.0,
+    val passingMarks: Double = 40.0,
+    val grade: String = "",
+    val isAbsent: Boolean = false,
+    val remarks: String = "",
+    val gradedByTeacherId: String = "",
+    val gradedByTeacherName: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 data class AcademySettings(
     val academyName: String = "Hafiz Quran Academy",
     val tagline: String = "Excellence in Quran Memorization, Tajweed & Tarbiyah",
     val phone: String = "0370-7304820 / 0349-3895409",
     val email: String = "admin@hafizquranacademy.edu",
-    val address: String = "Main Boulevard, Model Town, Lahore, Pakistan",
+    val address: String = "Ali Pur Sharqi Post, Gujrat",
     val currencyCode: String = "PKR",
     val jazzCashNumber: String = "03707304820",
     val easyPaisaNumber: String = "03493895409",

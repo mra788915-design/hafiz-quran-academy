@@ -16,6 +16,7 @@ import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.example.R
 import com.example.data.models.AcademySettings
 import com.example.data.models.Student
 import java.io.File
@@ -57,7 +58,7 @@ object CertificatePrintHelper {
         try {
             val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
             val page = document.startPage(pageInfo)
-            renderCertificateCanvas(page.canvas, student, settings)
+            renderCertificateCanvas(page.canvas, student, settings, context)
             document.finishPage(page)
             FileOutputStream(outputFile).use { fos ->
                 document.writeTo(fos)
@@ -66,7 +67,7 @@ object CertificatePrintHelper {
             document.close()
         } catch (e: IllegalStateException) {
             runCatching { document.close() }
-            val bitmap = renderCertificateBitmap(student, settings, scale = 2f)
+            val bitmap = renderCertificateBitmap(student, settings, scale = 2f, context = context)
             writeBitmapAsPdf14(outputFile, bitmap)
         }
         return outputFile
@@ -120,7 +121,8 @@ object CertificatePrintHelper {
     fun renderCertificateBitmap(
         student: Student,
         settings: AcademySettings = AcademySettings(),
-        scale: Float = 2f
+        scale: Float = 2f,
+        context: Context? = null
     ): Bitmap {
         val widthPx = (PAGE_WIDTH * scale).toInt().coerceAtLeast(PAGE_WIDTH)
         val heightPx = (PAGE_HEIGHT * scale).toInt().coerceAtLeast(PAGE_HEIGHT)
@@ -128,7 +130,7 @@ object CertificatePrintHelper {
         val canvas = Canvas(bitmap)
         canvas.save()
         canvas.scale(scale, scale)
-        renderCertificateCanvas(canvas, student, settings)
+        renderCertificateCanvas(canvas, student, settings, context)
         canvas.restore()
         return bitmap
     }
@@ -197,7 +199,7 @@ object CertificatePrintHelper {
                     }
                     val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create()
                     val page = pdfDoc.startPage(pageInfo)
-                    renderCertificateCanvas(page.canvas, student, settings)
+                    renderCertificateCanvas(page.canvas, student, settings, context)
                     pdfDoc.finishPage(page)
 
                     FileOutputStream(destination.fileDescriptor).use { out ->
@@ -249,7 +251,8 @@ object CertificatePrintHelper {
     fun renderCertificateCanvas(
         canvas: Canvas,
         student: Student,
-        settings: AcademySettings = AcademySettings()
+        settings: AcademySettings = AcademySettings(),
+        context: Context? = null
     ) {
         val w = PAGE_WIDTH.toFloat()
         val h = PAGE_HEIGHT.toFloat()
@@ -379,22 +382,37 @@ object CertificatePrintHelper {
         metaLabelPaint.textAlign = Paint.Align.RIGHT
         canvas.drawText("ADMISSION REG NO: ${student.admissionNumber}", w - 54f, 152f, metaLabelPaint)
 
-        // Gold Ribbon Title: SANAD-E-TAKMEEL • CERTIFICATE OF COMPLETION
-        val ribbonRect = RectF(centerX - 245f, 164f, centerX + 245f, 198f)
+        // Gold Ribbon Title: SANAD-E-TAKMEEL • CERTIFICATE OF COMPLETION (dynamically padded to prevent overflow)
+        val ribbonTitle = "SANAD-E-TAKMEEL  •  CERTIFICATE OF COURSE COMPLETION"
+        val ribbonTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 14f
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.05f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+        }
+        val maxRibbonWidth = w - 120f
+        while (ribbonTextPaint.measureText(ribbonTitle) > maxRibbonWidth - 56f && ribbonTextPaint.textSize > 10f) {
+            ribbonTextPaint.textSize -= 0.5f
+        }
+        val measuredTitleWidth = ribbonTextPaint.measureText(ribbonTitle)
+        val ribbonHalfWidth = (measuredTitleWidth / 2f + 28f).coerceIn(255f, maxRibbonWidth / 2f)
+        val ribbonRect = RectF(centerX - ribbonHalfWidth, 162f, centerX + ribbonHalfWidth, 198f)
         val ribbonBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = goldRoyal
             style = Paint.Style.FILL
         }
-        canvas.drawRoundRect(ribbonRect, 17f, 17f, ribbonBgPaint)
-
-        val ribbonTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = 15f
-            textAlign = Paint.Align.CENTER
-            letterSpacing = 0.06f
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+        val ribbonStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#9A7414")
+            style = Paint.Style.STROKE
+            strokeWidth = 1.4f
         }
-        canvas.drawText("SANAD-E-TAKMEEL  •  CERTIFICATE OF COURSE COMPLETION", centerX, 186f, ribbonTextPaint)
+        canvas.drawRoundRect(ribbonRect, 18f, 18f, ribbonBgPaint)
+        canvas.drawRoundRect(ribbonRect, 18f, 18f, ribbonStrokePaint)
+
+        val ribbonFm = ribbonTextPaint.fontMetrics
+        val ribbonBaselineY = ribbonRect.centerY() - (ribbonFm.ascent + ribbonFm.descent) / 2f
+        canvas.drawText(ribbonTitle, centerX, ribbonBaselineY, ribbonTextPaint)
 
         // Formal Citation Intro
         val citationItalicPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -511,9 +529,9 @@ object CertificatePrintHelper {
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
         }
-        canvas.drawText(remarksOrDua.take(115), centerX, 442f, quotePaint)
+        canvas.drawText(remarksOrDua.take(115), centerX, 438f, quotePaint)
 
-        // 3. Bottom Signatures & Concentric Official Gold Seal (y = 460 .. 548)
+        // 3. Bottom Signatures & Concentric Official Gold Seal (y = 450 .. 538)
         val sigLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = inkDark
             strokeWidth = 1.4f
@@ -534,47 +552,64 @@ object CertificatePrintHelper {
 
         // Left Signature: Class Teacher / Ustadh-e-Mohtaram
         val leftSigCenter = 185f
-        canvas.drawText(ustadhName, leftSigCenter, 504f, quotePaint)
-        canvas.drawLine(leftSigCenter - 95f, 512f, leftSigCenter + 95f, 512f, sigLinePaint)
-        canvas.drawText("Ustadh / Halaqah In-Charge", leftSigCenter, 528f, sigTitlePaint)
-        canvas.drawText("Department of Tajweed & Hifz", leftSigCenter, 542f, sigSubPaint)
+        canvas.drawText(ustadhName, leftSigCenter, 494f, quotePaint)
+        canvas.drawLine(leftSigCenter - 95f, 502f, leftSigCenter + 95f, 502f, sigLinePaint)
+        canvas.drawText("Ustadh / Halaqah In-Charge", leftSigCenter, 517f, sigTitlePaint)
+        canvas.drawText("Department of Tajweed & Hifz", leftSigCenter, 530f, sigSubPaint)
 
-        // Center Official Academy Gold Seal Stamp
-        val sealY = 502f
-        val sealRadius = 38f
-        val sealFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#FFF8DC")
-            style = Paint.Style.FILL
+        // Center Official Academy Seal Stamp Image (replaced custom vector circle with official Academy Seal)
+        val sealY = 494f
+        val sealHalfSize = 44f
+        val sealBitmap = context?.let { ctx ->
+            runCatching {
+                BitmapFactory.decodeResource(ctx.resources, R.drawable.academy_official_stamp)
+            }.getOrNull()
         }
-        drawEightPointStar(canvas, centerX, sealY, sealRadius + 5f, cornerFillGold)
-        canvas.drawCircle(centerX, sealY, sealRadius, sealFillPaint)
-        canvas.drawCircle(centerX, sealY, sealRadius, goldOuterStroke)
-        canvas.drawCircle(centerX, sealY, sealRadius - 5f, emeraldFineStroke)
+        if (sealBitmap != null) {
+            val sealDestRect = RectF(
+                centerX - sealHalfSize,
+                sealY - sealHalfSize,
+                centerX + sealHalfSize,
+                sealY + sealHalfSize
+            )
+            val stampPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(sealBitmap, null, sealDestRect, stampPaint)
+        } else {
+            val sealRadius = 38f
+            val sealFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#FFF8DC")
+                style = Paint.Style.FILL
+            }
+            drawEightPointStar(canvas, centerX, sealY, sealRadius + 5f, cornerFillGold)
+            canvas.drawCircle(centerX, sealY, sealRadius, sealFillPaint)
+            canvas.drawCircle(centerX, sealY, sealRadius, goldOuterStroke)
+            canvas.drawCircle(centerX, sealY, sealRadius - 5f, emeraldFineStroke)
 
-        val sealTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = emeraldDeep
-            textSize = 8.5f
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            val sealTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = emeraldDeep
+                textSize = 8.5f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            }
+            canvas.drawText("OFFICIAL", centerX, sealY - 9f, sealTextPaint)
+            canvas.drawText("SANAD SEAL", centerX, sealY + 2f, sealTextPaint)
+            val sealSmallGold = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = goldRoyal
+                textSize = 7.5f
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            }
+            canvas.drawText("VERIFIED • HQA", centerX, sealY + 13f, sealSmallGold)
         }
-        canvas.drawText("OFFICIAL", centerX, sealY - 9f, sealTextPaint)
-        canvas.drawText("SANAD SEAL", centerX, sealY + 2f, sealTextPaint)
-        val sealSmallGold = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = goldRoyal
-            textSize = 7.5f
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        }
-        canvas.drawText("VERIFIED • HQA", centerX, sealY + 13f, sealSmallGold)
 
         // Right Signature: Principal / Nazim-e-Aala
         val rightSigCenter = w - 185f
-        canvas.drawText(settings.onlineAccountTitle, rightSigCenter, 504f, quotePaint)
-        canvas.drawLine(rightSigCenter - 95f, 512f, rightSigCenter + 95f, 512f, sigLinePaint)
-        canvas.drawText(settings.authorizedSignatory, rightSigCenter, 528f, sigTitlePaint)
-        canvas.drawText(settings.academyName, rightSigCenter, 542f, sigSubPaint)
+        canvas.drawText(settings.onlineAccountTitle, rightSigCenter, 494f, quotePaint)
+        canvas.drawLine(rightSigCenter - 95f, 502f, rightSigCenter + 95f, 502f, sigLinePaint)
+        canvas.drawText(settings.authorizedSignatory, rightSigCenter, 517f, sigTitlePaint)
+        canvas.drawText(settings.academyName, rightSigCenter, 530f, sigSubPaint)
 
-        // Footer Campus Address & Contact Bar
+        // Footer Campus Address & Contact Bar (positioned cleanly above the bottom inner border line at y = 562)
         val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = inkMuted
             textSize = 9.5f
@@ -584,7 +619,7 @@ object CertificatePrintHelper {
         canvas.drawText(
             "${settings.address}  •  Contact: ${settings.phone}  •  Email: ${settings.email}",
             centerX,
-            564f,
+            553f,
             footerPaint
         )
     }

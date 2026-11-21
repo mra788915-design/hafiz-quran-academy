@@ -159,4 +159,71 @@ class ExampleRobolectricTest {
         assertTrue(database.feeChallanDao().getAllChallans().none { it.studentId == ahmadRaza.id })
         assertTrue(repository.authenticatePortalUser("p.raza", "Prnt@104", UserRole.PARENT).isFailure)
     }
+
+    @Test
+    fun `exams marks upload grades cleanly and generates valid pdf result card and class report`() = runBlocking {
+        repository.seedInitialDataIfEmpty()
+        val students = database.studentDao().getAllStudents()
+        val classes = database.classDao().getAllClasses()
+        val firstClass = classes.first()
+        val classStudents = students.filter { it.classId == firstClass.id }
+        assertTrue(classStudents.isNotEmpty())
+
+        val createdExam = repository.createOrUpdateExam(
+            title = "Final Tajweed Evaluation",
+            examType = com.example.data.models.ExamType.FINAL_EXAM,
+            subjectName = "Hifz & Tajweed",
+            classId = firstClass.id,
+            academicTerm = "2026-2027",
+            examDate = "2026-11-20",
+            totalMarks = 100.0,
+            passingMarks = 40.0,
+            instructions = "Recite last 5 Surahs with Makharij.",
+            createdByAdminName = "Principal Admin"
+        ).getOrThrow()
+
+        val stud = classStudents.first()
+        val savedCount = repository.saveBatchExamMarks(
+            examId = createdExam.id,
+            studentMarks = listOf(Triple(stud.id, 92.0, false)),
+            remarksMap = mapOf(stud.id to "Mumtaz performance"),
+            gradedByTeacherId = firstClass.assignedTeacherId,
+            gradedByTeacherName = firstClass.assignedTeacherName.ifBlank { "Qari Abdullah" }
+        ).getOrThrow()
+        assertEquals(1, savedCount)
+
+        // Updating mark for the same student + exam overwrites cleanly without duplicates
+        repository.saveExamMark(
+            examId = createdExam.id,
+            studentId = stud.id,
+            obtainedMarks = 95.0,
+            isAbsent = false,
+            remarks = "Updated recitation score",
+            gradedByTeacherId = firstClass.assignedTeacherId,
+            gradedByTeacherName = firstClass.assignedTeacherName.ifBlank { "Qari Abdullah" }
+        ).getOrThrow()
+
+        val allMarksForExam = database.examMarkDao().getAllMarks().filter { it.examId == createdExam.id && it.studentId == stud.id }
+        assertEquals(1, allMarksForExam.size)
+        assertEquals(95.0, allMarksForExam.first().obtainedMarks, 0.01)
+        assertTrue(allMarksForExam.first().grade.startsWith("A+"))
+
+        val studentMarks = database.examMarkDao().getAllMarks().filter { it.studentId == stud.id }
+        val resultPdf = com.example.util.ExamReportPdfGenerator.generateStudentResultCardPdf(
+            context = context,
+            student = stud,
+            marks = studentMarks,
+            settings = repository.settings
+        )
+        assertTrue(resultPdf.exists() && resultPdf.length() > 500)
+
+        val reportPdf = com.example.util.ExamReportPdfGenerator.generateExamMarksReportPdf(
+            context = context,
+            exam = createdExam,
+            marks = allMarksForExam,
+            enrolledStudents = classStudents,
+            settings = repository.settings
+        )
+        assertTrue(reportPdf.exists() && reportPdf.length() > 500)
+    }
 }

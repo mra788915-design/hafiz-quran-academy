@@ -56,7 +56,8 @@ data class DashboardMetrics(
     val totalFeesCollected: Double = 0.0,
     val totalFeesOutstanding: Double = 0.0,
     val pendingFsCount: Int = 0,
-    val unpaidChallansCount: Int = 0
+    val unpaidChallansCount: Int = 0,
+    val pendingLeavesCount: Int = 0
 )
 
 class AcademyViewModel(
@@ -105,13 +106,19 @@ class AcademyViewModel(
     val fsRecords: Flow<List<FeeSabilillahRecord>> = repository.allFsRecords
     val announcements: Flow<List<Announcement>> = repository.allAnnouncements
     val quranProgressList: Flow<List<QuranProgressRecord>> = repository.allProgress
+    val namazLogsList: Flow<List<NamazLogRecord>> = repository.allNamazLogs
+    val madniQaidaLogsList: Flow<List<MadniQaidaLogRecord>> = repository.allMadniQaidaLogs
+    val leaveRequestsList: Flow<List<LeaveRequest>> = repository.allLeaveRequests
+    val exams: Flow<List<AcademyExam>> = repository.allExams
+    val examMarks: Flow<List<ExamMarkRecord>> = repository.allExamMarks
     val allAttendance: Flow<List<AttendanceRecord>> = repository.allAttendance
     val allUserAccounts: Flow<List<UserAccount>> = repository.allUsers
 
     val dashboardMetrics: StateFlow<DashboardMetrics> = combine(
         combine(students, teachers, classes) { s, t, c -> Triple(s, t, c) },
-        combine(allAttendance, challans, fsRecords) { a, ch, f -> Triple(a, ch, f) }
-    ) { group1, group2 ->
+        combine(allAttendance, challans, fsRecords) { a, ch, f -> Triple(a, ch, f) },
+        leaveRequestsList
+    ) { group1, group2, leaves ->
         val studList = group1.first
         val teachList = group1.second
         val classList = group1.third
@@ -133,6 +140,7 @@ class AcademyViewModel(
         val totalOutstanding = chList.sumOf { it.remainingBalance }
         val unpaidCount = chList.count { it.status == ChallanStatus.UNPAID || it.status == ChallanStatus.OVERDUE }
         val pendingFs = fsList.count { it.approvalStatus == ApprovalStatus.PENDING }
+        val pendingLeaves = leaves.count { it.status == ApprovalStatus.PENDING }
 
         DashboardMetrics(
             activeStudentsCount = activeStuds.size,
@@ -146,7 +154,8 @@ class AcademyViewModel(
             totalFeesCollected = totalCollected,
             totalFeesOutstanding = totalOutstanding,
             pendingFsCount = pendingFs,
-            unpaidChallansCount = unpaidCount
+            unpaidChallansCount = unpaidCount,
+            pendingLeavesCount = pendingLeaves
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardMetrics())
 
@@ -156,12 +165,18 @@ class AcademyViewModel(
     init {
         repository.activeCloudUid = firebaseUid
         val editionRole = AppEditionConfig.ACTIVE_EDITION.prelockedRole
-        val savedLockedRole = editionRole ?: prefs.getString("locked_portal_role", null)?.let {
-            runCatching { UserRole.valueOf(it) }.getOrNull()
+        val savedLockedRole = if (editionRole != null) {
+            editionRole
+        } else {
+            prefs.edit().remove("locked_portal_role").apply()
+            null
         }
         if (savedLockedRole != null) {
             _lockedPortalRole.value = savedLockedRole
             _portalState.value = loginStateForRole(savedLockedRole)
+        } else {
+            _lockedPortalRole.value = null
+            _portalState.value = AppPortalState.HUB
         }
 
         viewModelScope.launch {
@@ -173,7 +188,7 @@ class AcademyViewModel(
                     activateCloudPortalSession(
                         profile = restoredProfile,
                         username = savedUsername,
-                        lockDevice = true
+                        lockDevice = editionRole != null
                     )
                 } else {
                     if (savedLockedRole != null) {
@@ -210,14 +225,14 @@ class AcademyViewModel(
         }
     }
 
-    fun openPortal(state: AppPortalState, lockToThisPortal: Boolean = true) {
+    fun openPortal(state: AppPortalState, lockToThisPortal: Boolean = false) {
         if (_currentUser.value.isAuthenticated) {
             _portalState.value = appStateForRole(_currentUser.value.role)
             return
         }
-        val locked = _lockedPortalRole.value
-        if (locked != null) {
-            _portalState.value = loginStateForRole(locked)
+        val enforcedEditionRole = AppEditionConfig.ACTIVE_EDITION.prelockedRole
+        if (enforcedEditionRole != null) {
+            _portalState.value = loginStateForRole(enforcedEditionRole)
             return
         }
         if (lockToThisPortal) {
@@ -345,7 +360,7 @@ class AcademyViewModel(
         usernameInput: String,
         passwordInput: String,
         requiredRole: UserRole,
-        lockDeviceToRole: Boolean = true,
+        lockDeviceToRole: Boolean = false,
         onResult: (Boolean, String?) -> Unit
     ) {
         authenticateDirectSingleApp(
@@ -368,8 +383,13 @@ class AcademyViewModel(
             username = "",
             isAuthenticated = false
         )
-        val locked = _lockedPortalRole.value
-        _portalState.value = if (locked != null) loginStateForRole(locked) else loginStateForRole(previousRole)
+        val prelocked = AppEditionConfig.ACTIVE_EDITION.prelockedRole
+        if (prelocked != null) {
+            _portalState.value = loginStateForRole(prelocked)
+        } else {
+            lockDeviceToPortal(null)
+            _portalState.value = AppPortalState.HUB
+        }
         viewModelScope.launch {
             cloudRepository.clearCloudSession(firebaseUid)
             _snackbarMessage.emit("Logged out safely.")
@@ -850,6 +870,337 @@ class AcademyViewModel(
             repository.deleteQuranProgress(progressId)
                 .onSuccess { _snackbarMessage.emit("Quran lesson record deleted") }
                 .onFailure { _snackbarMessage.emit("Failed to delete lesson: ${it.localizedMessage}") }
+        }
+    }
+
+    // --- Namaz & Masnoon Dua Logs ---
+    fun recordNamazLog(
+        studentId: String,
+        date: String,
+        prayerName: String,
+        duaOrSurahTopic: String,
+        rating: NamazProgressRating,
+        wuduAndPostureNotes: String,
+        teacherRemarks: String,
+        nextTarget: String,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val teacherId = _currentUser.value.teacherId ?: "Admin"
+            val teacherName = _currentUser.value.name
+            repository.recordNamazLog(
+                studentId = studentId,
+                teacherId = teacherId,
+                teacherName = teacherName,
+                date = date,
+                prayerName = prayerName,
+                duaOrSurahTopic = duaOrSurahTopic,
+                rating = rating,
+                wuduAndPostureNotes = wuduAndPostureNotes,
+                teacherRemarks = teacherRemarks,
+                nextTarget = nextTarget
+            ).onSuccess {
+                _snackbarMessage.emit("Namaz log synced live for ${it.studentName}")
+                onSuccess()
+            }.onFailure {
+                _snackbarMessage.emit("Failed to save Namaz log: ${it.localizedMessage}")
+            }
+        }
+    }
+
+    fun updateNamazLog(record: NamazLogRecord, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            repository.updateNamazLog(record)
+                .onSuccess {
+                    _snackbarMessage.emit("Namaz log updated for ${it.studentName}")
+                    onSuccess()
+                }
+                .onFailure {
+                    _snackbarMessage.emit("Failed to update Namaz log: ${it.localizedMessage}")
+                }
+        }
+    }
+
+    fun deleteNamazLog(logId: String) {
+        viewModelScope.launch {
+            repository.deleteNamazLog(logId)
+                .onSuccess { _snackbarMessage.emit("Namaz log removed") }
+                .onFailure { _snackbarMessage.emit("Failed to remove Namaz log: ${it.localizedMessage}") }
+        }
+    }
+
+    // --- Madni Qaida Logs ---
+    fun recordMadniQaidaLog(
+        studentId: String,
+        date: String,
+        lessonNumber: Int,
+        lessonTitle: String,
+        pageNumber: Int,
+        linesCovered: String,
+        rating: QuranProgressRating,
+        revisionSummary: String,
+        mistakesCount: Int,
+        teacherRemarks: String,
+        nextTarget: String,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val teacherId = _currentUser.value.teacherId ?: "Admin"
+            val teacherName = _currentUser.value.name
+            repository.recordMadniQaidaLog(
+                studentId = studentId,
+                teacherId = teacherId,
+                teacherName = teacherName,
+                date = date,
+                lessonNumber = lessonNumber,
+                lessonTitle = lessonTitle,
+                pageNumber = pageNumber,
+                linesCovered = linesCovered,
+                rating = rating,
+                revisionSummary = revisionSummary,
+                mistakesCount = mistakesCount,
+                teacherRemarks = teacherRemarks,
+                nextTarget = nextTarget
+            ).onSuccess {
+                _snackbarMessage.emit("Madni Qaida log synced live for ${it.studentName}")
+                onSuccess()
+            }.onFailure {
+                _snackbarMessage.emit("Failed to save Qaida log: ${it.localizedMessage}")
+            }
+        }
+    }
+
+    fun updateMadniQaidaLog(record: MadniQaidaLogRecord, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            repository.updateMadniQaidaLog(record)
+                .onSuccess {
+                    _snackbarMessage.emit("Madni Qaida log updated for ${it.studentName}")
+                    onSuccess()
+                }
+                .onFailure {
+                    _snackbarMessage.emit("Failed to update Qaida log: ${it.localizedMessage}")
+                }
+        }
+    }
+
+    fun deleteMadniQaidaLog(logId: String) {
+        viewModelScope.launch {
+            repository.deleteMadniQaidaLog(logId)
+                .onSuccess { _snackbarMessage.emit("Madni Qaida log removed") }
+                .onFailure { _snackbarMessage.emit("Failed to remove Qaida log: ${it.localizedMessage}") }
+        }
+    }
+
+    // --- Student Leave Requests (Parent Submit & Admin/Teacher Approve or Reject) ---
+    fun submitLeaveRequest(
+        studentId: String,
+        leaveType: String,
+        fromDate: String,
+        toDate: String,
+        reason: String,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val user = _currentUser.value
+            repository.submitLeaveRequest(
+                studentId = studentId,
+                parentUid = firebaseUid,
+                parentName = user.name,
+                leaveType = leaveType,
+                fromDate = fromDate,
+                toDate = toDate,
+                reason = reason
+            ).onSuccess {
+                _snackbarMessage.emit("Leave application submitted for ${it.studentName}")
+                onSuccess()
+            }.onFailure {
+                _snackbarMessage.emit("Leave submission error: ${it.localizedMessage}")
+            }
+        }
+    }
+
+    fun reviewLeaveRequest(
+        leaveId: String,
+        approved: Boolean,
+        remarks: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        val user = _currentUser.value
+        if (!user.isAuthenticated || (user.role != UserRole.ADMIN && user.role != UserRole.TEACHER)) {
+            viewModelScope.launch {
+                _snackbarMessage.emit("Only Admin or Assigned Teacher can approve or reject leaves.")
+            }
+            return
+        }
+        viewModelScope.launch {
+            repository.reviewLeaveRequest(
+                leaveId = leaveId,
+                approved = approved,
+                reviewerName = user.name,
+                reviewerRole = user.role.name,
+                reviewerRemarks = remarks
+            ).onSuccess {
+                val msg = if (approved) {
+                    "Leave Approved & Attendance marked as LEAVE for ${it.studentName}"
+                } else {
+                    "Leave Rejected for ${it.studentName}"
+                }
+                _snackbarMessage.emit(msg)
+                onSuccess()
+            }.onFailure {
+                _snackbarMessage.emit("Leave review failed: ${it.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteLeaveRequest(leaveId: String) {
+        viewModelScope.launch {
+            repository.deleteLeaveRequest(leaveId)
+                .onSuccess { _snackbarMessage.emit("Leave request cancelled/removed") }
+                .onFailure { _snackbarMessage.emit("Failed to cancel leave request: ${it.localizedMessage}") }
+        }
+    }
+
+    // --- Exams Management & Role-Restricted Marks Entry ---
+    fun createOrUpdateExam(
+        existingId: String? = null,
+        title: String,
+        examType: ExamType,
+        subjectName: String,
+        classId: String,
+        academicTerm: String,
+        examDate: String,
+        totalMarks: Double,
+        passingMarks: Double,
+        instructions: String,
+        onSuccess: (AcademyExam) -> Unit = {}
+    ) {
+        val user = _currentUser.value
+        if (!user.isAuthenticated || user.role != UserRole.ADMIN) {
+            viewModelScope.launch {
+                _snackbarMessage.emit("Only Admin can create or edit exams.")
+            }
+            return
+        }
+        viewModelScope.launch {
+            repository.createOrUpdateExam(
+                existingId = existingId,
+                title = title,
+                examType = examType,
+                subjectName = subjectName,
+                classId = classId,
+                academicTerm = academicTerm,
+                examDate = examDate,
+                totalMarks = totalMarks,
+                passingMarks = passingMarks,
+                instructions = instructions,
+                createdByAdminName = user.name
+            ).onSuccess { exam ->
+                _snackbarMessage.emit("Exam saved & synced: ${exam.title}")
+                onSuccess(exam)
+            }.onFailure { err ->
+                _snackbarMessage.emit("Exam save error: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteExam(examId: String) {
+        val user = _currentUser.value
+        if (!user.isAuthenticated || user.role != UserRole.ADMIN) {
+            viewModelScope.launch {
+                _snackbarMessage.emit("Only Admin can delete exams.")
+            }
+            return
+        }
+        viewModelScope.launch {
+            repository.deleteExam(examId)
+                .onSuccess { title ->
+                    _snackbarMessage.emit("Exam & linked marks deleted: $title")
+                }
+                .onFailure { err ->
+                    _snackbarMessage.emit("Exam delete error: ${err.localizedMessage}")
+                }
+        }
+    }
+
+    fun saveExamMark(
+        examId: String,
+        studentId: String,
+        obtainedMarks: Double,
+        isAbsent: Boolean,
+        remarks: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        val user = _currentUser.value
+        if (!user.isAuthenticated || (user.role != UserRole.ADMIN && user.role != UserRole.TEACHER)) {
+            viewModelScope.launch {
+                _snackbarMessage.emit("Unauthorized: Only Admin or Assigned Teacher can upload marks.")
+            }
+            return
+        }
+        viewModelScope.launch {
+            repository.saveExamMark(
+                examId = examId,
+                studentId = studentId,
+                obtainedMarks = obtainedMarks,
+                isAbsent = isAbsent,
+                remarks = remarks,
+                gradedByTeacherId = user.teacherId ?: "Admin",
+                gradedByTeacherName = user.name
+            ).onSuccess { mark ->
+                _snackbarMessage.emit("Marks uploaded for ${mark.studentName}: ${if (mark.isAbsent) "Absent" else "${mark.obtainedMarks}/${mark.totalMarks}"}")
+                onSuccess()
+            }.onFailure { err ->
+                _snackbarMessage.emit("Failed to upload marks: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun saveBatchExamMarks(
+        examId: String,
+        studentMarks: List<Triple<String, Double, Boolean>>,
+        remarksMap: Map<String, String>,
+        onSuccess: () -> Unit = {}
+    ) {
+        val user = _currentUser.value
+        if (!user.isAuthenticated || (user.role != UserRole.ADMIN && user.role != UserRole.TEACHER)) {
+            viewModelScope.launch {
+                _snackbarMessage.emit("Unauthorized: Only Admin or Assigned Teacher can upload marks.")
+            }
+            return
+        }
+        viewModelScope.launch {
+            repository.saveBatchExamMarks(
+                examId = examId,
+                studentMarks = studentMarks,
+                remarksMap = remarksMap,
+                gradedByTeacherId = user.teacherId ?: "Admin",
+                gradedByTeacherName = user.name
+            ).onSuccess { count ->
+                _snackbarMessage.emit("Uploaded & synced marks for $count students")
+                onSuccess()
+            }.onFailure { err ->
+                _snackbarMessage.emit("Batch marks upload failed: ${err.localizedMessage}")
+            }
+        }
+    }
+
+    fun deleteExamMark(markId: String) {
+        val user = _currentUser.value
+        if (!user.isAuthenticated || user.role != UserRole.ADMIN) {
+            viewModelScope.launch {
+                _snackbarMessage.emit("Only Admin can delete marks.")
+            }
+            return
+        }
+        viewModelScope.launch {
+            repository.deleteExamMark(markId)
+                .onSuccess { label ->
+                    _snackbarMessage.emit("Marks entry deleted: $label")
+                }
+                .onFailure { err ->
+                    _snackbarMessage.emit("Delete marks failed: ${err.localizedMessage}")
+                }
         }
     }
 

@@ -34,6 +34,7 @@
         "teacherIds": { "type": "array" },
         "studentIds": { "type": "array" },
         "announcementIds": { "type": "array" },
+        "examIds": { "type": "array" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -162,8 +163,12 @@
         "certificateRemarks": { "type": "string" },
         "recentAttendanceIds": { "type": "array" },
         "recentProgressIds": { "type": "array" },
+        "recentNamazIds": { "type": "array" },
+        "recentQaidaIds": { "type": "array" },
+        "recentLeaveIds": { "type": "array" },
         "recentChallanIds": { "type": "array" },
         "recentPaymentIds": { "type": "array" },
+        "recentExamMarkIds": { "type": "array" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -221,6 +226,91 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["progressId", "academyId", "adminUid", "date", "classId", "studentId", "studentName", "admissionNumber", "teacherId", "teacherName", "surahName", "surahNumber", "juzNumber", "sabaqAyatStart", "sabaqAyatEnd", "sabaqRating", "sabqiSummary", "manzilSummary", "mistakesCount", "teacherRemarks", "nextTarget", "createdAt", "updatedAt"]
+    },
+    "CloudNamazLog": {
+      "title": "CloudNamazLog",
+      "description": "Daily Salah / Namaz and Masnoon Dua tarbiyah log record. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "date": { "type": "string" },
+        "classId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "prayerName": { "type": "string" },
+        "duaOrSurahTopic": { "type": "string" },
+        "rating": { "type": "string", "enum": ["EXCELLENT", "MEMORIZED", "PRACTICED_GOOD", "NEEDS_CORRECTION", "MISSED"] },
+        "wuduAndPostureNotes": { "type": "string" },
+        "teacherRemarks": { "type": "string" },
+        "nextTarget": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "academyId", "adminUid", "date", "classId", "studentId", "studentName", "admissionNumber", "teacherId", "teacherName", "prayerName", "duaOrSurahTopic", "rating", "wuduAndPostureNotes", "teacherRemarks", "nextTarget", "createdAt", "updatedAt"]
+    },
+    "CloudMadniQaidaLog": {
+      "title": "CloudMadniQaidaLog",
+      "description": "Daily Madni Qaida lesson, Makharij and Tajweed progress record. Clients submit FieldValue.serverTimestamp().",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "date": { "type": "string" },
+        "classId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "lessonNumber": { "type": "integer" },
+        "lessonTitle": { "type": "string" },
+        "pageNumber": { "type": "integer" },
+        "linesCovered": { "type": "string" },
+        "rating": { "type": "string", "enum": ["EXCELLENT", "VERY_GOOD", "GOOD", "AVERAGE", "NEEDS_REVISION"] },
+        "revisionSummary": { "type": "string" },
+        "mistakesCount": { "type": "integer" },
+        "teacherRemarks": { "type": "string" },
+        "nextTarget": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "academyId", "adminUid", "date", "classId", "studentId", "studentName", "admissionNumber", "teacherId", "teacherName", "lessonNumber", "lessonTitle", "pageNumber", "linesCovered", "rating", "revisionSummary", "mistakesCount", "teacherRemarks", "nextTarget", "createdAt", "updatedAt"]
+    },
+    "CloudLeaveRequest": {
+      "title": "CloudLeaveRequest",
+      "description": "Student leave application submitted from Parent Portal and approved/rejected by Admin or Teacher.",
+      "type": "object",
+      "properties": {
+        "leaveId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "parentUid": { "type": "string" },
+        "parentName": { "type": "string" },
+        "leaveType": { "type": "string" },
+        "fromDate": { "type": "string" },
+        "toDate": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "reviewerName": { "type": "string" },
+        "reviewerRole": { "type": "string" },
+        "reviewedDate": { "type": "string" },
+        "reviewerRemarks": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["leaveId", "academyId", "adminUid", "studentId", "studentName", "admissionNumber", "classId", "className", "teacherId", "parentUid", "parentName", "leaveType", "fromDate", "toDate", "reason", "status", "reviewerName", "reviewerRole", "reviewedDate", "reviewerRemarks", "createdAt", "updatedAt"]
     },
     "CloudFeeChallan": {
       "title": "CloudFeeChallan",
@@ -325,6 +415,62 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["announcementId", "academyId", "adminUid", "title", "content", "targetRole", "date", "priority", "authorName", "createdAt", "updatedAt"]
+    },
+    "CloudExam": {
+      "title": "CloudExam",
+      "description": "Exam schedule metadata (TEST, MID_EXAM, FINAL_EXAM) created and managed exclusively by Admin.",
+      "type": "object",
+      "properties": {
+        "examId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "title": { "type": "string" },
+        "examType": { "type": "string", "enum": ["TEST", "MID_EXAM", "FINAL_EXAM"] },
+        "subjectName": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "academicTerm": { "type": "string" },
+        "examDate": { "type": "string" },
+        "totalMarks": { "type": "number" },
+        "passingMarks": { "type": "number" },
+        "instructions": { "type": "string" },
+        "createdByAdminName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["examId", "academyId", "adminUid", "title", "examType", "subjectName", "classId", "className", "academicTerm", "examDate", "totalMarks", "passingMarks", "instructions", "createdByAdminName", "createdAt", "updatedAt"]
+    },
+    "CloudExamMark": {
+      "title": "CloudExamMark",
+      "description": "Student exam marks record. Admin has full CRUD; assigned Teacher can upload and update marks only; linked Parent has read-only access.",
+      "type": "object",
+      "properties": {
+        "markId": { "type": "string" },
+        "academyId": { "type": "string" },
+        "adminUid": { "type": "string" },
+        "examId": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "examType": { "type": "string", "enum": ["TEST", "MID_EXAM", "FINAL_EXAM"] },
+        "subjectName": { "type": "string" },
+        "examDate": { "type": "string" },
+        "academicTerm": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "admissionNumber": { "type": "string" },
+        "obtainedMarks": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "passingMarks": { "type": "number" },
+        "grade": { "type": "string" },
+        "isAbsent": { "type": "boolean" },
+        "remarks": { "type": "string" },
+        "gradedByTeacherId": { "type": "string" },
+        "gradedByTeacherName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["markId", "academyId", "adminUid", "examId", "examTitle", "examType", "subjectName", "examDate", "academicTerm", "classId", "className", "studentId", "studentName", "admissionNumber", "obtainedMarks", "totalMarks", "passingMarks", "grade", "isAbsent", "remarks", "gradedByTeacherId", "gradedByTeacherName", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -364,6 +510,18 @@
       "schema": "CloudQuranProgress",
       "description": "Daily Quran Sabaq, Sabqi, and Manzil progress records."
     },
+    "/namaz_logs/{logId}": {
+      "schema": "CloudNamazLog",
+      "description": "Daily Salah / Namaz and Masnoon Dua progress records."
+    },
+    "/madni_qaida_logs/{logId}": {
+      "schema": "CloudMadniQaidaLog",
+      "description": "Daily Madni Qaida lesson and Makharij progress records."
+    },
+    "/leave_requests/{leaveId}": {
+      "schema": "CloudLeaveRequest",
+      "description": "Student leave requests submitted by parents and reviewed by Admin or assigned Teacher."
+    },
     "/fee_challans/{challanId}": {
       "schema": "CloudFeeChallan",
       "description": "Monthly fee challans."
@@ -379,6 +537,14 @@
     "/announcements/{announcementId}": {
       "schema": "CloudAnnouncement",
       "description": "Academy announcements."
+    },
+    "/exams/{examId}": {
+      "schema": "CloudExam",
+      "description": "Exam schedules (TEST, MID_EXAM, FINAL_EXAM) managed exclusively by Admin."
+    },
+    "/exam_marks/{markId}": {
+      "schema": "CloudExamMark",
+      "description": "Student exam marks uploaded by Teacher/Admin and viewed by Parents."
     }
   }
 }

@@ -28,6 +28,10 @@ service cloud.firestore {
       return hash is string && hash.size() == 64 && hash.matches('^[a-f0-9]{64}$');
     }
 
+    function isReqStr(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+
     function isValidBoundedStr(val, minLen, maxLen) {
       return val is string && val.size() >= minLen && val.size() <= maxLen;
     }
@@ -37,11 +41,11 @@ service cloud.firestore {
     }
 
     function isIdList(arr, maxItems) {
-      return arr is list && arr.size() <= maxItems && (arr.size() == 0 || isValidId(arr[0]));
+      return arr is list && arr.size() <= maxItems;
     }
 
     function isValidIdList(arr, maxItems) {
-      return isIdList(arr, maxItems);
+      return arr is list && arr.size() <= maxItems;
     }
 
     function isValidTimestampPair(data) {
@@ -177,6 +181,7 @@ service cloud.firestore {
              isValidIdList(data.teacherIds, 60) &&
              isValidIdList(data.studentIds, 300) &&
              isValidIdList(data.announcementIds, 50) &&
+             (!('examIds' in data) || isValidIdList(data.examIds, 200)) &&
              isValidTimestampPair(data);
     }
 
@@ -245,9 +250,9 @@ service cloud.firestore {
     }
 
     function isValidCloudStudent(data) {
-      return isValidId(data.studentId) &&
-             isValidId(data.academyId) &&
-             isValidId(data.adminUid) &&
+      return isReqStr(data.studentId, 128) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
              isValidBoundedStr(data.admissionNumber, 1, 40) &&
              isValidBoundedStr(data.fullName, 1, 120) &&
              isValidBoundedStr(data.guardianName, 1, 120) &&
@@ -257,7 +262,7 @@ service cloud.firestore {
              isValidBoundedStr(data.contactNumber, 1, 40) &&
              isOptStr(data.alternateContact, 40) &&
              isOptStr(data.address, 250) &&
-             isValidId(data.classId) &&
+             isReqStr(data.classId, 128) &&
              isValidBoundedStr(data.className, 1, 120) &&
              isOptStr(data.teacherId, 128) &&
              isOptStr(data.teacherName, 120) &&
@@ -275,19 +280,23 @@ service cloud.firestore {
              (!('certificateRemarks' in data) || isOptStr(data.certificateRemarks, 350)) &&
              isIdList(data.recentAttendanceIds, 40) &&
              isIdList(data.recentProgressIds, 30) &&
+             (!('recentNamazIds' in data) || isIdList(data.recentNamazIds, 30)) &&
+             (!('recentQaidaIds' in data) || isIdList(data.recentQaidaIds, 30)) &&
+             (!('recentLeaveIds' in data) || isIdList(data.recentLeaveIds, 24)) &&
              isIdList(data.recentChallanIds, 24) &&
              isIdList(data.recentPaymentIds, 24) &&
+             (!('recentExamMarkIds' in data) || isIdList(data.recentExamMarkIds, 60)) &&
              isValidTimestampPair(data);
     }
 
     function isValidCloudAttendance(data) {
       return isValidId(data.attendanceId) &&
-             isValidId(data.academyId) &&
-             isValidId(data.adminUid) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
              isValidBoundedStr(data.date, 8, 20) &&
-             isValidId(data.classId) &&
+             isReqStr(data.classId, 128) &&
              isValidBoundedStr(data.className, 1, 120) &&
-             isValidId(data.studentId) &&
+             isReqStr(data.studentId, 128) &&
              isValidBoundedStr(data.studentName, 1, 120) &&
              isValidBoundedStr(data.admissionNumber, 1, 40) &&
              data.status in ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'] &&
@@ -298,11 +307,11 @@ service cloud.firestore {
 
     function isValidCloudQuranProgress(data) {
       return isValidId(data.progressId) &&
-             isValidId(data.academyId) &&
-             isValidId(data.adminUid) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
              isValidBoundedStr(data.date, 8, 20) &&
-             isValidId(data.classId) &&
-             isValidId(data.studentId) &&
+             isReqStr(data.classId, 128) &&
+             isReqStr(data.studentId, 128) &&
              isValidBoundedStr(data.studentName, 1, 120) &&
              isValidBoundedStr(data.admissionNumber, 1, 40) &&
              isValidBoundedStr(data.teacherId, 1, 128) &&
@@ -321,15 +330,82 @@ service cloud.firestore {
              isValidTimestampPair(data);
     }
 
+    function isValidCloudNamazLog(data) {
+      return isValidId(data.logId) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
+             isValidBoundedStr(data.date, 8, 20) &&
+             isReqStr(data.classId, 128) &&
+             isReqStr(data.studentId, 128) &&
+             isValidBoundedStr(data.studentName, 1, 120) &&
+             isValidBoundedStr(data.admissionNumber, 1, 40) &&
+             isValidBoundedStr(data.teacherId, 1, 128) &&
+             isValidBoundedStr(data.teacherName, 1, 120) &&
+             isValidBoundedStr(data.prayerName, 1, 80) &&
+             isOptStr(data.duaOrSurahTopic, 150) &&
+             data.rating in ['EXCELLENT', 'MEMORIZED', 'PRACTICED_GOOD', 'NEEDS_CORRECTION', 'MISSED'] &&
+             isOptStr(data.wuduAndPostureNotes, 200) &&
+             isOptStr(data.teacherRemarks, 350) &&
+             isOptStr(data.nextTarget, 200) &&
+             isValidTimestampPair(data);
+    }
+
+    function isValidCloudMadniQaidaLog(data) {
+      return isValidId(data.logId) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
+             isValidBoundedStr(data.date, 8, 20) &&
+             isReqStr(data.classId, 128) &&
+             isReqStr(data.studentId, 128) &&
+             isValidBoundedStr(data.studentName, 1, 120) &&
+             isValidBoundedStr(data.admissionNumber, 1, 40) &&
+             isValidBoundedStr(data.teacherId, 1, 128) &&
+             isValidBoundedStr(data.teacherName, 1, 120) &&
+             data.lessonNumber is int && data.lessonNumber >= 1 && data.lessonNumber <= 30 &&
+             isValidBoundedStr(data.lessonTitle, 1, 120) &&
+             data.pageNumber is int && data.pageNumber >= 1 && data.pageNumber <= 150 &&
+             isOptStr(data.linesCovered, 80) &&
+             data.rating in ['EXCELLENT', 'VERY_GOOD', 'GOOD', 'AVERAGE', 'NEEDS_REVISION'] &&
+             isOptStr(data.revisionSummary, 200) &&
+             data.mistakesCount is int && data.mistakesCount >= 0 && data.mistakesCount <= 200 &&
+             isOptStr(data.teacherRemarks, 350) &&
+             isOptStr(data.nextTarget, 200) &&
+             isValidTimestampPair(data);
+    }
+
+    function isValidCloudLeaveRequest(data) {
+      return isValidId(data.leaveId) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
+             isReqStr(data.studentId, 128) &&
+             isValidBoundedStr(data.studentName, 1, 120) &&
+             isValidBoundedStr(data.admissionNumber, 1, 40) &&
+             isReqStr(data.classId, 128) &&
+             isValidBoundedStr(data.className, 1, 120) &&
+             isOptStr(data.teacherId, 128) &&
+             isOptStr(data.parentUid, 128) &&
+             isOptStr(data.parentName, 120) &&
+             isValidBoundedStr(data.leaveType, 1, 60) &&
+             isValidBoundedStr(data.fromDate, 8, 20) &&
+             isValidBoundedStr(data.toDate, 8, 20) &&
+             isValidBoundedStr(data.reason, 2, 500) &&
+             data.status in ['PENDING', 'APPROVED', 'REJECTED'] &&
+             isOptStr(data.reviewerName, 120) &&
+             isOptStr(data.reviewerRole, 30) &&
+             isOptStr(data.reviewedDate, 25) &&
+             isOptStr(data.reviewerRemarks, 350) &&
+             isValidTimestampPair(data);
+    }
+
     function isValidCloudFeeChallan(data) {
       return isValidId(data.challanId) &&
-             isValidId(data.academyId) &&
-             isValidId(data.adminUid) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
              isValidBoundedStr(data.challanNumber, 1, 60) &&
-             isValidId(data.studentId) &&
+             isReqStr(data.studentId, 128) &&
              isValidBoundedStr(data.admissionNumber, 1, 40) &&
              isValidBoundedStr(data.studentName, 1, 120) &&
-             isValidId(data.classId) &&
+             isReqStr(data.classId, 128) &&
              isValidBoundedStr(data.className, 1, 120) &&
              isValidBoundedStr(data.billingMonth, 1, 30) &&
              data.billingYear is int && data.billingYear >= 2020 && data.billingYear <= 2100 &&
@@ -353,11 +429,11 @@ service cloud.firestore {
 
     function isValidCloudFeePayment(data) {
       return isValidId(data.paymentId) &&
-             isValidId(data.academyId) &&
-             isValidId(data.adminUid) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
              isValidId(data.challanId) &&
              isValidBoundedStr(data.challanNumber, 1, 60) &&
-             isValidId(data.studentId) &&
+             isReqStr(data.studentId, 128) &&
              isValidBoundedStr(data.studentName, 1, 120) &&
              data.amount is number && data.amount > 0 && data.amount <= 5000000 &&
              isValidBoundedStr(data.paymentDate, 8, 35) &&
@@ -370,9 +446,9 @@ service cloud.firestore {
 
     function isValidCloudFsRecord(data) {
       return isValidId(data.fsId) &&
-             isValidId(data.academyId) &&
-             isValidId(data.adminUid) &&
-             isValidId(data.studentId) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
+             isReqStr(data.studentId, 128) &&
              isValidBoundedStr(data.studentName, 1, 120) &&
              isValidBoundedStr(data.admissionNumber, 1, 40) &&
              isValidBoundedStr(data.className, 1, 120) &&
@@ -390,14 +466,58 @@ service cloud.firestore {
 
     function isValidCloudAnnouncement(data) {
       return isValidId(data.announcementId) &&
-             isValidId(data.academyId) &&
-             isValidId(data.adminUid) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
              isValidBoundedStr(data.title, 1, 150) &&
              isValidBoundedStr(data.content, 1, 1500) &&
              data.targetRole in ['All', 'Teachers', 'Parents'] &&
              isValidBoundedStr(data.date, 8, 25) &&
              data.priority in ['Normal', 'High', 'Urgent'] &&
              isValidBoundedStr(data.authorName, 1, 120) &&
+             isValidTimestampPair(data);
+    }
+
+    function isValidCloudExam(data) {
+      return isValidId(data.examId) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
+             isValidBoundedStr(data.title, 1, 150) &&
+             data.examType in ['TEST', 'MID_EXAM', 'FINAL_EXAM'] &&
+             isValidBoundedStr(data.subjectName, 1, 120) &&
+             isReqStr(data.classId, 128) &&
+             isValidBoundedStr(data.className, 1, 120) &&
+             isValidBoundedStr(data.academicTerm, 1, 40) &&
+             isValidBoundedStr(data.examDate, 8, 25) &&
+             data.totalMarks is number && data.totalMarks >= 1 && data.totalMarks <= 1000 &&
+             data.passingMarks is number && data.passingMarks >= 0 && data.passingMarks <= data.totalMarks &&
+             isOptStr(data.instructions, 400) &&
+             isValidBoundedStr(data.createdByAdminName, 1, 120) &&
+             isValidTimestampPair(data);
+    }
+
+    function isValidCloudExamMark(data) {
+      return isValidId(data.markId) &&
+             isReqStr(data.academyId, 128) &&
+             isReqStr(data.adminUid, 128) &&
+             isValidId(data.examId) &&
+             isValidBoundedStr(data.examTitle, 1, 150) &&
+             data.examType in ['TEST', 'MID_EXAM', 'FINAL_EXAM'] &&
+             isOptStr(data.subjectName, 120) &&
+             isValidBoundedStr(data.examDate, 8, 25) &&
+             isValidBoundedStr(data.academicTerm, 1, 40) &&
+             isReqStr(data.classId, 128) &&
+             isValidBoundedStr(data.className, 1, 120) &&
+             isReqStr(data.studentId, 128) &&
+             isValidBoundedStr(data.studentName, 1, 120) &&
+             isValidBoundedStr(data.admissionNumber, 1, 40) &&
+             data.obtainedMarks is number && data.obtainedMarks >= 0 && data.obtainedMarks <= data.totalMarks &&
+             data.totalMarks is number && data.totalMarks >= 1 && data.totalMarks <= 1000 &&
+             data.passingMarks is number && data.passingMarks >= 0 && data.passingMarks <= data.totalMarks &&
+             isValidBoundedStr(data.grade, 1, 40) &&
+             data.isAbsent is bool &&
+             isOptStr(data.remarks, 300) &&
+             isValidBoundedStr(data.gradedByTeacherId, 1, 128) &&
+             isValidBoundedStr(data.gradedByTeacherName, 1, 120) &&
              isValidTimestampPair(data);
     }
 
@@ -437,7 +557,7 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                        isValidId(academyId) &&
                        incoming().keys().hasAll(['academyId', 'adminUid', 'academyName', 'easyPaisaNumber', 'jazzCashNumber', 'onlineAccountTitle', 'easyPaisaIban', 'classIds', 'teacherIds', 'studentIds', 'announcementIds', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['academyId', 'adminUid', 'academyName', 'easyPaisaNumber', 'jazzCashNumber', 'onlineAccountTitle', 'easyPaisaIban', 'classIds', 'teacherIds', 'studentIds', 'announcementIds', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['academyId', 'adminUid', 'academyName', 'easyPaisaNumber', 'jazzCashNumber', 'onlineAccountTitle', 'easyPaisaIban', 'classIds', 'teacherIds', 'studentIds', 'announcementIds', 'examIds', 'createdAt', 'updatedAt']) &&
                        isValidAcademyDirectory(incoming()) &&
                        incoming().academyId == academyId &&
                        incoming().adminUid == request.auth.uid &&
@@ -449,7 +569,7 @@ service cloud.firestore {
                        incoming().academyId == existing().academyId &&
                        incoming().createdAt == existing().createdAt &&
                        isAdminInAcademy(academyId) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['adminUid', 'academyName', 'easyPaisaNumber', 'jazzCashNumber', 'onlineAccountTitle', 'easyPaisaIban', 'classIds', 'teacherIds', 'studentIds', 'announcementIds', 'updatedAt']);
+                       incoming().diff(existing()).affectedKeys().hasOnly(['adminUid', 'academyName', 'easyPaisaNumber', 'jazzCashNumber', 'onlineAccountTitle', 'easyPaisaIban', 'classIds', 'teacherIds', 'studentIds', 'announcementIds', 'examIds', 'updatedAt']);
 
       allow delete: if false;
     }
@@ -571,8 +691,7 @@ service cloud.firestore {
 
       allow create: if isSignedIn() &&
                        isValidId(studentId) &&
-                       incoming().keys().hasAll(['studentId', 'academyId', 'adminUid', 'admissionNumber', 'fullName', 'guardianName', 'dateOfBirth', 'admissionDate', 'gender', 'contactNumber', 'alternateContact', 'address', 'classId', 'className', 'teacherId', 'teacherName', 'quranLevel', 'monthlyFee', 'feeCategory', 'isFsEligible', 'fsStatus', 'status', 'notes', 'completedCourse', 'completionDate', 'certificateNumber', 'finalGrade', 'certificateRemarks', 'recentAttendanceIds', 'recentProgressIds', 'recentChallanIds', 'recentPaymentIds', 'createdAt', 'updatedAt']) &&
-                       incoming().keys().hasOnly(['studentId', 'academyId', 'adminUid', 'admissionNumber', 'fullName', 'guardianName', 'dateOfBirth', 'admissionDate', 'gender', 'contactNumber', 'alternateContact', 'address', 'classId', 'className', 'teacherId', 'teacherName', 'quranLevel', 'monthlyFee', 'feeCategory', 'isFsEligible', 'fsStatus', 'status', 'notes', 'completedCourse', 'completionDate', 'certificateNumber', 'finalGrade', 'certificateRemarks', 'recentAttendanceIds', 'recentProgressIds', 'recentChallanIds', 'recentPaymentIds', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['studentId', 'academyId', 'adminUid', 'admissionNumber', 'fullName', 'guardianName', 'dateOfBirth', 'admissionDate', 'gender', 'contactNumber', 'alternateContact', 'address', 'classId', 'className', 'teacherId', 'teacherName', 'quranLevel', 'monthlyFee', 'feeCategory', 'isFsEligible', 'fsStatus', 'status', 'notes', 'completedCourse', 'completionDate', 'certificateNumber', 'finalGrade', 'certificateRemarks', 'recentAttendanceIds', 'recentProgressIds', 'recentNamazIds', 'recentQaidaIds', 'recentLeaveIds', 'recentChallanIds', 'recentPaymentIds', 'recentExamMarkIds', 'createdAt', 'updatedAt']) &&
                        isValidCloudStudent(incoming()) &&
                        incoming().studentId == studentId &&
                        isAdminInAcademy(incoming().academyId) &&
@@ -591,18 +710,21 @@ service cloud.firestore {
              inc.createdAt == ext.createdAt &&
              isValidTimestampPair(inc) && (
                ((ext.adminUid == request.auth.uid || isAdminInAcademy(ext.academyId)) &&
-                inc.keys().hasAll(['studentId', 'academyId', 'adminUid', 'admissionNumber', 'fullName', 'guardianName', 'dateOfBirth', 'admissionDate', 'gender', 'contactNumber', 'alternateContact', 'address', 'classId', 'className', 'teacherId', 'teacherName', 'quranLevel', 'monthlyFee', 'feeCategory', 'isFsEligible', 'fsStatus', 'status', 'notes', 'recentAttendanceIds', 'recentProgressIds', 'recentChallanIds', 'recentPaymentIds', 'createdAt', 'updatedAt']) &&
-                inc.keys().hasOnly(['studentId', 'academyId', 'adminUid', 'admissionNumber', 'fullName', 'guardianName', 'dateOfBirth', 'admissionDate', 'gender', 'contactNumber', 'alternateContact', 'address', 'classId', 'className', 'teacherId', 'teacherName', 'quranLevel', 'monthlyFee', 'feeCategory', 'isFsEligible', 'fsStatus', 'status', 'notes', 'completedCourse', 'completionDate', 'certificateNumber', 'finalGrade', 'certificateRemarks', 'recentAttendanceIds', 'recentProgressIds', 'recentChallanIds', 'recentPaymentIds', 'createdAt', 'updatedAt']) &&
+                inc.keys().hasOnly(['studentId', 'academyId', 'adminUid', 'admissionNumber', 'fullName', 'guardianName', 'dateOfBirth', 'admissionDate', 'gender', 'contactNumber', 'alternateContact', 'address', 'classId', 'className', 'teacherId', 'teacherName', 'quranLevel', 'monthlyFee', 'feeCategory', 'isFsEligible', 'fsStatus', 'status', 'notes', 'completedCourse', 'completionDate', 'certificateNumber', 'finalGrade', 'certificateRemarks', 'recentAttendanceIds', 'recentProgressIds', 'recentNamazIds', 'recentQaidaIds', 'recentLeaveIds', 'recentChallanIds', 'recentPaymentIds', 'recentExamMarkIds', 'createdAt', 'updatedAt']) &&
                 isValidCloudStudent(inc)) ||
                (ext.status in ['ACTIVE', 'COMPLETED'] &&
                 isTeacherOfClass(ext.academyId, ext.classId) &&
-                inc.diff(ext).affectedKeys().hasOnly(['recentAttendanceIds', 'recentProgressIds', 'updatedAt']) &&
+                inc.diff(ext).affectedKeys().hasOnly(['recentAttendanceIds', 'recentProgressIds', 'recentNamazIds', 'recentQaidaIds', 'recentExamMarkIds', 'updatedAt']) &&
                 isIdList(inc.recentAttendanceIds, 40) &&
-                isIdList(inc.recentProgressIds, 30)) ||
+                isIdList(inc.recentProgressIds, 30) &&
+                (!('recentNamazIds' in inc) || isIdList(inc.recentNamazIds, 30)) &&
+                (!('recentQaidaIds' in inc) || isIdList(inc.recentQaidaIds, 30)) &&
+                (!('recentExamMarkIds' in inc) || isIdList(inc.recentExamMarkIds, 60))) ||
                (ext.status in ['ACTIVE', 'COMPLETED'] &&
                 isParentOfStudent(ext.academyId, studentId) &&
-                inc.diff(ext).affectedKeys().hasOnly(['recentPaymentIds', 'updatedAt']) &&
-                isIdList(inc.recentPaymentIds, 24))
+                inc.diff(ext).affectedKeys().hasOnly(['recentPaymentIds', 'recentLeaveIds', 'updatedAt']) &&
+                isIdList(inc.recentPaymentIds, 24) &&
+                (!('recentLeaveIds' in inc) || isIdList(inc.recentLeaveIds, 24)))
              );
     }
 
@@ -622,7 +744,6 @@ service cloud.firestore {
 
       allow create: if isSignedIn() &&
                        isValidId(attendanceId) &&
-                       incoming().keys().hasAll(['attendanceId', 'academyId', 'adminUid', 'date', 'classId', 'className', 'studentId', 'studentName', 'admissionNumber', 'status', 'remarks', 'markedByTeacherId', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly(['attendanceId', 'academyId', 'adminUid', 'date', 'classId', 'className', 'studentId', 'studentName', 'admissionNumber', 'status', 'remarks', 'markedByTeacherId', 'createdAt', 'updatedAt']) &&
                        isValidCloudAttendance(incoming()) &&
                        incoming().attendanceId == attendanceId &&
@@ -703,7 +824,6 @@ service cloud.firestore {
 
       allow create: if isSignedIn() &&
                        isValidId(challanId) &&
-                       incoming().keys().hasAll(['challanId', 'academyId', 'adminUid', 'challanNumber', 'studentId', 'admissionNumber', 'studentName', 'classId', 'className', 'billingMonth', 'billingYear', 'issueDate', 'dueDate', 'monthlyTuitionFee', 'additionalCharges', 'discountAmount', 'fsAssistanceAmount', 'previousBalance', 'totalPayable', 'amountPaid', 'remainingBalance', 'status', 'paymentDate', 'paymentMethod', 'transactionRef', 'remarks', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly(['challanId', 'academyId', 'adminUid', 'challanNumber', 'studentId', 'admissionNumber', 'studentName', 'classId', 'className', 'billingMonth', 'billingYear', 'issueDate', 'dueDate', 'monthlyTuitionFee', 'additionalCharges', 'discountAmount', 'fsAssistanceAmount', 'previousBalance', 'totalPayable', 'amountPaid', 'remainingBalance', 'status', 'paymentDate', 'paymentMethod', 'transactionRef', 'remarks', 'createdAt', 'updatedAt']) &&
                        isValidCloudFeeChallan(incoming()) &&
                        incoming().challanId == challanId &&
@@ -724,7 +844,6 @@ service cloud.firestore {
              inc.createdAt == ext.createdAt &&
              isValidTimestampPair(inc) && (
                ((ext.adminUid == request.auth.uid || isAdminInAcademy(ext.academyId)) &&
-                inc.keys().hasAll(['challanId', 'academyId', 'adminUid', 'challanNumber', 'studentId', 'admissionNumber', 'studentName', 'classId', 'className', 'billingMonth', 'billingYear', 'issueDate', 'dueDate', 'monthlyTuitionFee', 'additionalCharges', 'discountAmount', 'fsAssistanceAmount', 'previousBalance', 'totalPayable', 'amountPaid', 'remainingBalance', 'status', 'paymentDate', 'paymentMethod', 'transactionRef', 'remarks', 'createdAt', 'updatedAt']) &&
                 inc.keys().hasOnly(['challanId', 'academyId', 'adminUid', 'challanNumber', 'studentId', 'admissionNumber', 'studentName', 'classId', 'className', 'billingMonth', 'billingYear', 'issueDate', 'dueDate', 'monthlyTuitionFee', 'additionalCharges', 'discountAmount', 'fsAssistanceAmount', 'previousBalance', 'totalPayable', 'amountPaid', 'remainingBalance', 'status', 'paymentDate', 'paymentMethod', 'transactionRef', 'remarks', 'createdAt', 'updatedAt']) &&
                 isValidCloudFeeChallan(inc)) ||
                (ext.status != 'PAID' &&
@@ -827,6 +946,236 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly(['adminUid', 'title', 'content', 'targetRole', 'date', 'priority', 'authorName', 'updatedAt']);
 
       allow delete: if isSignedIn() && isValidId(announcementId) && (resource == null ? isAdminInAcademy('hqa_main') : (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId)));
+    }
+
+    // 14. Daily Namaz & Masnoon Dua Logs
+    match /namaz_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (
+        resource == null
+          ? (isAdminInAcademy('hqa_main') || isTeacherInAcademy('hqa_main'))
+          : (
+              existing().adminUid == request.auth.uid ||
+              isAdminInAcademy(existing().academyId) ||
+              isTeacherOfClass(existing().academyId, existing().classId) ||
+              isParentOfStudent(existing().academyId, existing().studentId)
+            )
+      );
+      allow list: if isSignedIn() && (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId));
+
+      allow create: if isSignedIn() &&
+                       isValidId(logId) &&
+                       incoming().keys().hasAll(['logId', 'academyId', 'adminUid', 'date', 'classId', 'studentId', 'studentName', 'admissionNumber', 'teacherId', 'teacherName', 'prayerName', 'duaOrSurahTopic', 'rating', 'wuduAndPostureNotes', 'teacherRemarks', 'nextTarget', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['logId', 'academyId', 'adminUid', 'date', 'classId', 'studentId', 'studentName', 'admissionNumber', 'teacherId', 'teacherName', 'prayerName', 'duaOrSurahTopic', 'rating', 'wuduAndPostureNotes', 'teacherRemarks', 'nextTarget', 'createdAt', 'updatedAt']) &&
+                       isValidCloudNamazLog(incoming()) &&
+                       incoming().logId == logId &&
+                       (isAdminInAcademy(incoming().academyId) || isTeacherOfClass(incoming().academyId, incoming().classId)) &&
+                       exists(/databases/$(database)/documents/students/$(incoming().studentId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(logId) &&
+                       isValidCloudNamazLog(incoming()) &&
+                       incoming().logId == existing().logId &&
+                       incoming().academyId == existing().academyId &&
+                       incoming().studentId == existing().studentId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdminInAcademy(existing().academyId) || isTeacherOfClass(existing().academyId, existing().classId)) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['adminUid', 'date', 'classId', 'studentName', 'admissionNumber', 'teacherId', 'teacherName', 'prayerName', 'duaOrSurahTopic', 'rating', 'wuduAndPostureNotes', 'teacherRemarks', 'nextTarget', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(logId) && (
+        resource == null
+          ? (isAdminInAcademy('hqa_main') || isTeacherInAcademy('hqa_main'))
+          : (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId) || isTeacherOfClass(existing().academyId, existing().classId))
+      );
+    }
+
+    // 15. Daily Madni Qaida Logs
+    match /madni_qaida_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (
+        resource == null
+          ? (isAdminInAcademy('hqa_main') || isTeacherInAcademy('hqa_main'))
+          : (
+              existing().adminUid == request.auth.uid ||
+              isAdminInAcademy(existing().academyId) ||
+              isTeacherOfClass(existing().academyId, existing().classId) ||
+              isParentOfStudent(existing().academyId, existing().studentId)
+            )
+      );
+      allow list: if isSignedIn() && (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId));
+
+      allow create: if isSignedIn() &&
+                       isValidId(logId) &&
+                       incoming().keys().hasAll(['logId', 'academyId', 'adminUid', 'date', 'classId', 'studentId', 'studentName', 'admissionNumber', 'teacherId', 'teacherName', 'lessonNumber', 'lessonTitle', 'pageNumber', 'linesCovered', 'rating', 'revisionSummary', 'mistakesCount', 'teacherRemarks', 'nextTarget', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['logId', 'academyId', 'adminUid', 'date', 'classId', 'studentId', 'studentName', 'admissionNumber', 'teacherId', 'teacherName', 'lessonNumber', 'lessonTitle', 'pageNumber', 'linesCovered', 'rating', 'revisionSummary', 'mistakesCount', 'teacherRemarks', 'nextTarget', 'createdAt', 'updatedAt']) &&
+                       isValidCloudMadniQaidaLog(incoming()) &&
+                       incoming().logId == logId &&
+                       (isAdminInAcademy(incoming().academyId) || isTeacherOfClass(incoming().academyId, incoming().classId)) &&
+                       exists(/databases/$(database)/documents/students/$(incoming().studentId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(logId) &&
+                       isValidCloudMadniQaidaLog(incoming()) &&
+                       incoming().logId == existing().logId &&
+                       incoming().academyId == existing().academyId &&
+                       incoming().studentId == existing().studentId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdminInAcademy(existing().academyId) || isTeacherOfClass(existing().academyId, existing().classId)) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['adminUid', 'date', 'classId', 'studentName', 'admissionNumber', 'teacherId', 'teacherName', 'lessonNumber', 'lessonTitle', 'pageNumber', 'linesCovered', 'rating', 'revisionSummary', 'mistakesCount', 'teacherRemarks', 'nextTarget', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(logId) && (
+        resource == null
+          ? (isAdminInAcademy('hqa_main') || isTeacherInAcademy('hqa_main'))
+          : (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId) || isTeacherOfClass(existing().academyId, existing().classId))
+      );
+    }
+
+    // 16. Student Leave Requests (Submitted by Parent, Reviewed/Approved by Admin or Class Teacher)
+    match /leave_requests/{leaveId} {
+      allow get: if isSignedIn() && isValidId(leaveId) && (
+        resource == null
+          ? isEnrolledInAcademy('hqa_main')
+          : (
+              existing().adminUid == request.auth.uid ||
+              existing().parentUid == request.auth.uid ||
+              isAdminInAcademy(existing().academyId) ||
+              isTeacherOfClass(existing().academyId, existing().classId) ||
+              (existing().teacherId != '' && isTeacherWithId(existing().academyId, existing().teacherId)) ||
+              isParentOfStudent(existing().academyId, existing().studentId)
+            )
+      );
+      allow list: if isSignedIn() && (existing().adminUid == request.auth.uid || existing().parentUid == request.auth.uid || isAdminInAcademy(existing().academyId));
+
+      allow create: if isSignedIn() &&
+                       isValidId(leaveId) &&
+                       incoming().keys().hasAll(['leaveId', 'academyId', 'adminUid', 'studentId', 'studentName', 'admissionNumber', 'classId', 'className', 'teacherId', 'parentUid', 'parentName', 'leaveType', 'fromDate', 'toDate', 'reason', 'status', 'reviewerName', 'reviewerRole', 'reviewedDate', 'reviewerRemarks', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['leaveId', 'academyId', 'adminUid', 'studentId', 'studentName', 'admissionNumber', 'classId', 'className', 'teacherId', 'parentUid', 'parentName', 'leaveType', 'fromDate', 'toDate', 'reason', 'status', 'reviewerName', 'reviewerRole', 'reviewedDate', 'reviewerRemarks', 'createdAt', 'updatedAt']) &&
+                       isValidCloudLeaveRequest(incoming()) &&
+                       incoming().leaveId == leaveId &&
+                       exists(/databases/$(database)/documents/students/$(incoming().studentId)) &&
+                       (
+                         isAdminInAcademy(incoming().academyId) ||
+                         (
+                           isParentOfStudent(incoming().academyId, incoming().studentId) &&
+                           incoming().parentUid == request.auth.uid &&
+                           incoming().status == 'PENDING' &&
+                           incoming().reviewerName == '' &&
+                           incoming().reviewerRole == '' &&
+                           incoming().reviewedDate == '' &&
+                           incoming().reviewerRemarks == ''
+                         )
+                       );
+
+      allow update: if isSignedIn() && isValidId(leaveId) && canUpdateLeaveRequest();
+
+      allow delete: if isSignedIn() && isValidId(leaveId) && (
+        resource == null
+          ? isAdminInAcademy('hqa_main')
+          : (
+              existing().adminUid == request.auth.uid ||
+              isAdminInAcademy(existing().academyId) ||
+              (existing().status == 'PENDING' && (existing().parentUid == request.auth.uid || isParentOfStudent(existing().academyId, existing().studentId)))
+            )
+      );
+    }
+
+    function canUpdateLeaveRequest() {
+      let inc = request.resource.data;
+      let ext = resource.data;
+      return inc.leaveId == ext.leaveId &&
+             inc.academyId == ext.academyId &&
+             inc.studentId == ext.studentId &&
+             inc.parentUid == ext.parentUid &&
+             inc.createdAt == ext.createdAt &&
+             isValidTimestampPair(inc) &&
+             isValidCloudLeaveRequest(inc) && (
+               (isAdminInAcademy(ext.academyId) &&
+                inc.diff(ext).affectedKeys().hasOnly(['adminUid', 'classId', 'className', 'teacherId', 'leaveType', 'fromDate', 'toDate', 'reason', 'status', 'reviewerName', 'reviewerRole', 'reviewedDate', 'reviewerRemarks', 'updatedAt'])) ||
+               (ext.status == 'PENDING' &&
+                (isTeacherOfClass(ext.academyId, ext.classId) || (ext.teacherId != '' && isTeacherWithId(ext.academyId, ext.teacherId))) &&
+                inc.status in ['APPROVED', 'REJECTED'] &&
+                inc.diff(ext).affectedKeys().hasOnly(['status', 'reviewerName', 'reviewerRole', 'reviewedDate', 'reviewerRemarks', 'updatedAt']))
+             );
+    }
+
+    // 17. Academy Exams (Tests, Mid Exams, Final Exams — Created/Edited/Deleted EXCLUSIVELY by Admin)
+    match /exams/{examId} {
+      allow get: if isSignedIn() && isValidId(examId) && (
+        resource == null
+          ? isEnrolledInAcademy('hqa_main')
+          : (
+              existing().adminUid == request.auth.uid ||
+              isAdminInAcademy(existing().academyId) ||
+              isTeacherOfClass(existing().academyId, existing().classId) ||
+              isEnrolledInAcademy(existing().academyId)
+            )
+      );
+      allow list: if isSignedIn() && (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId));
+
+      allow create: if isSignedIn() &&
+                       isValidId(examId) &&
+                       incoming().keys().hasAll(['examId', 'academyId', 'adminUid', 'title', 'examType', 'subjectName', 'classId', 'className', 'academicTerm', 'examDate', 'totalMarks', 'passingMarks', 'instructions', 'createdByAdminName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['examId', 'academyId', 'adminUid', 'title', 'examType', 'subjectName', 'classId', 'className', 'academicTerm', 'examDate', 'totalMarks', 'passingMarks', 'instructions', 'createdByAdminName', 'createdAt', 'updatedAt']) &&
+                       isValidCloudExam(incoming()) &&
+                       incoming().examId == examId &&
+                       isAdminInAcademy(incoming().academyId) &&
+                       exists(/databases/$(database)/documents/classes/$(incoming().classId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(examId) &&
+                       isValidCloudExam(incoming()) &&
+                       incoming().examId == existing().examId &&
+                       incoming().academyId == existing().academyId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isAdminInAcademy(existing().academyId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['adminUid', 'title', 'examType', 'subjectName', 'classId', 'className', 'academicTerm', 'examDate', 'totalMarks', 'passingMarks', 'instructions', 'createdByAdminName', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(examId) && (resource == null ? isAdminInAcademy('hqa_main') : (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId)));
+    }
+
+    // 18. Student Exam Marks (Admin full CRUD; Assigned Class Teacher Upload/Update ONLY — NO Exam CRUD & NO Delete)
+    match /exam_marks/{markId} {
+      allow get: if isSignedIn() && isValidId(markId) && (
+        resource == null
+          ? (isAdminInAcademy('hqa_main') || isTeacherInAcademy('hqa_main'))
+          : (
+              existing().adminUid == request.auth.uid ||
+              isAdminInAcademy(existing().academyId) ||
+              isTeacherOfClass(existing().academyId, existing().classId) ||
+              isParentOfStudent(existing().academyId, existing().studentId)
+            )
+      );
+      allow list: if isSignedIn() && (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId));
+
+      allow create: if isSignedIn() &&
+                       isValidId(markId) &&
+                       incoming().keys().hasAll(['markId', 'academyId', 'adminUid', 'examId', 'examTitle', 'examType', 'subjectName', 'examDate', 'academicTerm', 'classId', 'className', 'studentId', 'studentName', 'admissionNumber', 'obtainedMarks', 'totalMarks', 'passingMarks', 'grade', 'isAbsent', 'remarks', 'gradedByTeacherId', 'gradedByTeacherName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['markId', 'academyId', 'adminUid', 'examId', 'examTitle', 'examType', 'subjectName', 'examDate', 'academicTerm', 'classId', 'className', 'studentId', 'studentName', 'admissionNumber', 'obtainedMarks', 'totalMarks', 'passingMarks', 'grade', 'isAbsent', 'remarks', 'gradedByTeacherId', 'gradedByTeacherName', 'createdAt', 'updatedAt']) &&
+                       isValidCloudExamMark(incoming()) &&
+                       incoming().markId == markId &&
+                       exists(/databases/$(database)/documents/exams/$(incoming().examId)) &&
+                       exists(/databases/$(database)/documents/students/$(incoming().studentId)) &&
+                       (isAdminInAcademy(incoming().academyId) || isTeacherOfClass(incoming().academyId, incoming().classId));
+
+      allow update: if isSignedIn() && isValidId(markId) && canUpdateExamMark();
+
+      allow delete: if isSignedIn() && isValidId(markId) && (resource == null ? isAdminInAcademy('hqa_main') : (existing().adminUid == request.auth.uid || isAdminInAcademy(existing().academyId)));
+    }
+
+    function canUpdateExamMark() {
+      let inc = request.resource.data;
+      let ext = resource.data;
+      return inc.markId == ext.markId &&
+             inc.academyId == ext.academyId &&
+             inc.examId == ext.examId &&
+             inc.studentId == ext.studentId &&
+             inc.classId == ext.classId &&
+             inc.createdAt == ext.createdAt &&
+             isValidTimestampPair(inc) &&
+             isValidCloudExamMark(inc) && (
+               (isAdminInAcademy(ext.academyId) &&
+                inc.diff(ext).affectedKeys().hasOnly(['adminUid', 'examTitle', 'examType', 'subjectName', 'examDate', 'academicTerm', 'className', 'studentName', 'admissionNumber', 'obtainedMarks', 'totalMarks', 'passingMarks', 'grade', 'isAbsent', 'remarks', 'gradedByTeacherId', 'gradedByTeacherName', 'updatedAt'])) ||
+               (isTeacherOfClass(ext.academyId, ext.classId) &&
+                inc.diff(ext).affectedKeys().hasOnly(['obtainedMarks', 'grade', 'isAbsent', 'remarks', 'gradedByTeacherId', 'gradedByTeacherName', 'updatedAt']))
+             );
     }
   }
 }

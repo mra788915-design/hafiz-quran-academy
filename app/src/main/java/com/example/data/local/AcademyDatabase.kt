@@ -14,13 +14,18 @@ import com.example.data.models.*
         AcademyClass::class,
         AttendanceRecord::class,
         QuranProgressRecord::class,
+        NamazLogRecord::class,
+        MadniQaidaLogRecord::class,
+        LeaveRequest::class,
         FeeChallan::class,
         FeePayment::class,
         FeeSabilillahRecord::class,
         Announcement::class,
-        ScheduleItem::class
+        ScheduleItem::class,
+        AcademyExam::class,
+        ExamMarkRecord::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
 abstract class AcademyDatabase : RoomDatabase() {
@@ -29,11 +34,16 @@ abstract class AcademyDatabase : RoomDatabase() {
     abstract fun classDao(): ClassDao
     abstract fun attendanceDao(): AttendanceDao
     abstract fun quranProgressDao(): QuranProgressDao
+    abstract fun namazLogDao(): NamazLogDao
+    abstract fun madniQaidaLogDao(): MadniQaidaLogDao
+    abstract fun leaveRequestDao(): LeaveRequestDao
     abstract fun feeChallanDao(): FeeChallanDao
     abstract fun feePaymentDao(): FeePaymentDao
     abstract fun feeSabilillahDao(): FeeSabilillahDao
     abstract fun announcementDao(): AnnouncementDao
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun examDao(): ExamDao
+    abstract fun examMarkDao(): ExamMarkDao
     abstract fun userDao(): UserDao
     abstract fun syncCleanupDao(): SyncCleanupDao
 

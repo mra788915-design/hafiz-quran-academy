@@ -36,13 +36,6 @@ fun PortalSelectionHubScreen(
     onSwitchGoogleAccount: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var directUsername by remember { mutableStateOf("") }
-    var directPassword by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var isDirectLoading by remember { mutableStateOf(false) }
-    var directError by remember { mutableStateOf<String?>(null) }
-    var showAdminRecoveryDialog by remember { mutableStateOf(false) }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -50,7 +43,7 @@ fun PortalSelectionHubScreen(
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         Box(
             modifier = Modifier
@@ -77,12 +70,12 @@ fun PortalSelectionHubScreen(
             )
         )
         Text(
-            text = "Single App Setup • Live Cloud Connected",
+            text = "Hafiz Quran Academy • Select Your Portal",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Apke phone par sirf 1 hi app chalegi (Admin, Teacher ya Parent) aur baqi phones ke sath live connected rahegi.",
+            text = "Admin, Teacher aur Parent portals apas mein Live Cloud ke zariye connected hain.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -91,7 +84,6 @@ fun PortalSelectionHubScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Cloud Google connection badge
         Surface(
             color = Color(0xFFD1E7DD),
             shape = RoundedCornerShape(10.dp)
@@ -108,209 +100,59 @@ fun PortalSelectionHubScreen(
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = "Cloud Active: ${viewModel.firebaseEmail ?: "Google Connected"}",
+                    text = "Google Connected: ${viewModel.firebaseEmail ?: "Live Cloud Active"}",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = Color(0xFF0F5132)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
-
-        // Direct Login Card: Enter Admin-issued Username & Password -> Auto-locks phone to ONLY that 1 app
-        ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 540.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PhonelinkLock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Column {
-                        Text(
-                            text = "Direct Login (Auto-Lock Your Single App)",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = "Admin ka diya hua Username & Password enter karein — yeh phone khud apki 1 app (Admin, Teacher ya Parent) ban jayega.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                OutlinedTextField(
-                    value = directUsername,
-                    onValueChange = { directUsername = it; directError = null },
-                    label = { Text("Username (Issued by Admin)") },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("direct_username_input")
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = directPassword,
-                    onValueChange = { directPassword = it; directError = null },
-                    label = { Text("Password") },
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (passwordVisible) "Hide Password" else "Show Password"
-                            )
-                        }
-                    },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("direct_password_input")
-                )
-
-                if (directError != null) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        color = Color(0xFFFEE2E2),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = directError!!,
-                            color = Color(0xFF991B1B),
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                            modifier = Modifier.padding(10.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Button(
-                    onClick = {
-                        if (directUsername.isBlank() || directPassword.isBlank()) {
-                            directError = "Apna Username aur Password dono darj karein."
-                            return@Button
-                        }
-                        isDirectLoading = true
-                        viewModel.authenticateDirectSingleApp(
-                            usernameInput = directUsername,
-                            passwordInput = directPassword,
-                            requiredRole = null,
-                            lockDeviceToRole = true
-                        ) { success, err ->
-                            isDirectLoading = false
-                            if (!success) {
-                                directError = err ?: "Invalid credentials."
-                            }
-                        }
-                    },
-                    enabled = !isDirectLoading,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("direct_login_submit_btn")
-                ) {
-                    if (isDirectLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Verifying & Syncing Cloud...", fontWeight = FontWeight.Bold)
-                    } else {
-                        Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Login & Activate My Single App", fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextButton(
-                    onClick = { showAdminRecoveryDialog = true },
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .testTag("hub_reset_admin_credentials_btn")
-                ) {
-                    Icon(Icons.Default.LockReset, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Admin Login Invalid? Reset / Change Admin Username & Password")
-                }
-            }
-        }
-
         Spacer(modifier = Modifier.height(20.dp))
 
-        Text(
-            text = "Ya neechay se is phone ke liye 1 makhsoos app muntakhib karein:",
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         PortalChoiceCard(
-            title = "HQA Admin App",
-            urduTitle = "صرف ایڈمن ایپ • نظامت اکیڈمی",
-            description = "Sirf Admin ke phone ke liye: admissions, teachers, classes, fee challans, QR payments, FS waivers aur Teacher/Parent logins banana.",
+            title = "Admin Portal",
+            urduTitle = "نظامِ اکیڈمی • ایڈمن پورٹل",
+            description = "Admissions, teachers, classes, exams & result cards, fee challans, certificates (Sanad) aur logins management.",
             icon = Icons.Default.AdminPanelSettings,
-            badge = "ADMIN PHONE ONLY",
+            badge = "ADMIN",
             badgeColor = Color(0xFFD1E7DD),
             badgeTextColor = Color(0xFF0F5132),
             containerColor = MaterialTheme.colorScheme.surface,
-            onClick = { onSelectPortal(AppPortalState.ADMIN_LOGIN, true) },
+            onClick = { onSelectPortal(AppPortalState.ADMIN_LOGIN, false) },
             testTag = "hub_card_admin"
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
         PortalChoiceCard(
-            title = "HQA Teacher App",
-            urduTitle = "صرف اساتذہ ایپ • اساتذہ کرام",
-            description = "Sirf Ustadh ke phone ke liye: apni classes ki hazri (attendance) aur Sabaq, Sabqi, Manzil darj karna — Admin aur Parents ke sath live sync.",
+            title = "Teacher Portal",
+            urduTitle = "اساتذہ کرام • ٹیچر پورٹل",
+            description = "Apni classes ki hazri (attendance), Quran/Namaz/Qaida logs, leave review aur Exam Marks upload karna.",
             icon = Icons.Default.School,
-            badge = "TEACHER PHONE ONLY",
+            badge = "TEACHER",
             badgeColor = Color(0xFFEDE9FE),
             badgeTextColor = Color(0xFF5B21B6),
             containerColor = MaterialTheme.colorScheme.surface,
-            onClick = { onSelectPortal(AppPortalState.TEACHER_LOGIN, true) },
+            onClick = { onSelectPortal(AppPortalState.TEACHER_LOGIN, false) },
             testTag = "hub_card_teacher"
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
         PortalChoiceCard(
-            title = "HQA Parent App",
-            urduTitle = "صرف والدین ایپ • سرپرست و والدین",
-            description = "Sirf Walidain ke phone ke liye: apne bachon ki Quran progress, hazri, 3-copy QR fee challan aur JazzCash/EasyPaisa online fee payment.",
+            title = "Parent Portal",
+            urduTitle = "والدین و سرپرست • پیرنٹ پورٹل",
+            description = "Bachon ke Quran/Namaz/Qaida logs, exam marks & Result Card PDF, hazri, chutti application aur QR fee challan.",
             icon = Icons.Default.FamilyRestroom,
-            badge = "PARENT PHONE ONLY",
+            badge = "PARENT",
             badgeColor = Color(0xFFFEF3C7),
             badgeTextColor = Color(0xFF92400E),
             containerColor = MaterialTheme.colorScheme.surface,
-            onClick = { onSelectPortal(AppPortalState.PARENT_LOGIN, true) },
+            onClick = { onSelectPortal(AppPortalState.PARENT_LOGIN, false) },
             testTag = "hub_card_parent"
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         TextButton(
             onClick = onSwitchGoogleAccount,
@@ -322,18 +164,6 @@ fun PortalSelectionHubScreen(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-    }
-
-    if (showAdminRecoveryDialog) {
-        ChangeOrResetAdminCredentialsDialog(
-            currentUsername = directUsername,
-            isRecoveryMode = true,
-            googleEmail = viewModel.firebaseEmail,
-            onDismiss = { showAdminRecoveryDialog = false },
-            onSubmit = { newU, newP, onDone ->
-                viewModel.recoverOrResetAdminCredentials(newU, newP, onDone)
-            }
-        )
     }
 }
 
@@ -419,7 +249,7 @@ fun PortalChoiceCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Set Up This Phone as $title",
+                    text = "Open $title",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -452,7 +282,7 @@ fun AdminLoginScreen(
         icon = Icons.Default.AdminPanelSettings,
         iconBgColor = Color(0xFFD1E7DD),
         iconTintColor = Color(0xFF0F5132),
-        securityNotice = "Yeh phone sirf HQA Admin App par lock hai. Teacher aur Parent logins yahan kaam nahi kar sakte. (First-time default Admin: admin / Admin@123)",
+        securityNotice = "Academy Administration sign-in synced live with Cloud. (First-time default Admin: admin / Admin@123)",
         usernameTag = "admin_email_input",
         passwordTag = "admin_password_input",
         submitTag = "admin_login_submit_btn",
@@ -480,7 +310,7 @@ fun TeacherLoginScreen(
         icon = Icons.Default.School,
         iconBgColor = Color(0xFFEDE9FE),
         iconTintColor = Color(0xFF5B21B6),
-        securityNotice = "Yeh phone sirf HQA Teacher App par lock hai. Username aur Password sirf Academy Admin ki taraf se milta hai aur live Cloud ke sath connected hai.",
+        securityNotice = "Username aur Password Academy Admin ki taraf se milta hai aur live Cloud ke sath connected hai.",
         usernameTag = "teacher_username_input",
         passwordTag = "teacher_password_input",
         submitTag = "teacher_login_submit_btn",
@@ -508,7 +338,7 @@ fun ParentLoginScreen(
         icon = Icons.Default.FamilyRestroom,
         iconBgColor = Color(0xFFFEF3C7),
         iconTintColor = Color(0xFF92400E),
-        securityNotice = "Yeh phone sirf HQA Parent App par lock hai. Username aur Password sirf Academy Admin ki taraf se milta hai aur apke bachon ka live record dikhata hai.",
+        securityNotice = "Username aur Password Academy Admin ki taraf se milta hai aur apke bachon ka live record dikhata hai.",
         usernameTag = "parent_username_input",
         passwordTag = "parent_password_input",
         submitTag = "parent_login_submit_btn",
@@ -589,7 +419,7 @@ private fun IsolatedPortalLoginTemplate(
                     modifier = Modifier.size(13.dp)
                 )
                 Text(
-                    text = "SINGLE DEDICATED APP • LIVE CLOUD",
+                    text = "HAFIZ QURAN ACADEMY • LIVE CLOUD",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = iconTintColor
                 )
@@ -684,7 +514,7 @@ private fun IsolatedPortalLoginTemplate(
                     usernameInput = username,
                     passwordInput = password,
                     requiredRole = requiredRole,
-                    lockDeviceToRole = true
+                    lockDeviceToRole = false
                 ) { success, err ->
                     isLoading = false
                     if (!success) {
@@ -706,7 +536,7 @@ private fun IsolatedPortalLoginTemplate(
             } else {
                 Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign In (${requiredRole.name} ONLY)", fontWeight = FontWeight.Bold)
+                Text("Sign In (${requiredRole.name})", fontWeight = FontWeight.Bold)
             }
         }
 
@@ -768,7 +598,7 @@ private fun IsolatedPortalLoginTemplate(
                 ) {
                     Icon(Icons.Default.AppSettingsAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Change Phone App Setup")
+                    Text("Back to 3 Portals")
                 }
             }
 

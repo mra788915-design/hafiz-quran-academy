@@ -182,6 +182,87 @@ interface QuranProgressDao {
 }
 
 @Dao
+interface NamazLogDao {
+    @Query("SELECT * FROM namaz_logs WHERE studentId = :studentId ORDER BY date DESC, timestamp DESC")
+    fun getNamazLogsByStudentFlow(studentId: String): Flow<List<NamazLogRecord>>
+
+    @Query("SELECT * FROM namaz_logs ORDER BY date DESC, timestamp DESC LIMIT 250")
+    fun getAllNamazLogsFlow(): Flow<List<NamazLogRecord>>
+
+    @Query("SELECT * FROM namaz_logs WHERE id = :id LIMIT 1")
+    suspend fun getNamazLogById(id: String): NamazLogRecord?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNamazLog(record: NamazLogRecord)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNamazLogs(records: List<NamazLogRecord>)
+
+    @Update
+    suspend fun updateNamazLog(record: NamazLogRecord)
+
+    @Query("DELETE FROM namaz_logs WHERE id = :id")
+    suspend fun deleteNamazLogById(id: String)
+
+    @Query("DELETE FROM namaz_logs WHERE studentId = :studentId")
+    suspend fun deleteNamazLogsByStudentId(studentId: String)
+}
+
+@Dao
+interface MadniQaidaLogDao {
+    @Query("SELECT * FROM madni_qaida_logs WHERE studentId = :studentId ORDER BY date DESC, timestamp DESC")
+    fun getQaidaLogsByStudentFlow(studentId: String): Flow<List<MadniQaidaLogRecord>>
+
+    @Query("SELECT * FROM madni_qaida_logs ORDER BY date DESC, timestamp DESC LIMIT 250")
+    fun getAllQaidaLogsFlow(): Flow<List<MadniQaidaLogRecord>>
+
+    @Query("SELECT * FROM madni_qaida_logs WHERE id = :id LIMIT 1")
+    suspend fun getQaidaLogById(id: String): MadniQaidaLogRecord?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertQaidaLog(record: MadniQaidaLogRecord)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertQaidaLogs(records: List<MadniQaidaLogRecord>)
+
+    @Update
+    suspend fun updateQaidaLog(record: MadniQaidaLogRecord)
+
+    @Query("DELETE FROM madni_qaida_logs WHERE id = :id")
+    suspend fun deleteQaidaLogById(id: String)
+
+    @Query("DELETE FROM madni_qaida_logs WHERE studentId = :studentId")
+    suspend fun deleteQaidaLogsByStudentId(studentId: String)
+}
+
+@Dao
+interface LeaveRequestDao {
+    @Query("SELECT * FROM leave_requests WHERE studentId = :studentId ORDER BY createdAt DESC")
+    fun getLeavesByStudentFlow(studentId: String): Flow<List<LeaveRequest>>
+
+    @Query("SELECT * FROM leave_requests ORDER BY createdAt DESC")
+    fun getAllLeaveRequestsFlow(): Flow<List<LeaveRequest>>
+
+    @Query("SELECT * FROM leave_requests WHERE id = :id LIMIT 1")
+    suspend fun getLeaveById(id: String): LeaveRequest?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLeaveRequest(leave: LeaveRequest)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLeaveRequests(leaves: List<LeaveRequest>)
+
+    @Update
+    suspend fun updateLeaveRequest(leave: LeaveRequest)
+
+    @Query("DELETE FROM leave_requests WHERE id = :id")
+    suspend fun deleteLeaveById(id: String)
+
+    @Query("DELETE FROM leave_requests WHERE studentId = :studentId")
+    suspend fun deleteLeavesByStudentId(studentId: String)
+}
+
+@Dao
 interface FeeChallanDao {
     @Query("SELECT * FROM fee_challans ORDER BY createdAt DESC")
     fun getAllChallansFlow(): Flow<List<FeeChallan>>
@@ -362,6 +443,78 @@ interface UserDao {
 }
 
 @Dao
+interface ExamDao {
+    @Query("SELECT * FROM exams ORDER BY examDate DESC, createdAt DESC")
+    fun getAllExamsFlow(): Flow<List<AcademyExam>>
+
+    @Query("SELECT * FROM exams ORDER BY examDate DESC, createdAt DESC")
+    suspend fun getAllExams(): List<AcademyExam>
+
+    @Query("SELECT * FROM exams WHERE classId = :classId ORDER BY examDate DESC, createdAt DESC")
+    fun getExamsByClassFlow(classId: String): Flow<List<AcademyExam>>
+
+    @Query("SELECT * FROM exams WHERE id = :id LIMIT 1")
+    suspend fun getExamById(id: String): AcademyExam?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExam(exam: AcademyExam)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExams(exams: List<AcademyExam>)
+
+    @Update
+    suspend fun updateExam(exam: AcademyExam)
+
+    @Query("DELETE FROM exams WHERE id = :id")
+    suspend fun deleteExamById(id: String)
+}
+
+@Dao
+interface ExamMarkDao {
+    @Query("SELECT * FROM exam_marks ORDER BY examDate DESC, timestamp DESC")
+    fun getAllMarksFlow(): Flow<List<ExamMarkRecord>>
+
+    @Query("SELECT * FROM exam_marks ORDER BY examDate DESC, timestamp DESC")
+    suspend fun getAllMarks(): List<ExamMarkRecord>
+
+    @Query("SELECT * FROM exam_marks WHERE examId = :examId ORDER BY studentName ASC")
+    fun getMarksByExamFlow(examId: String): Flow<List<ExamMarkRecord>>
+
+    @Query("SELECT * FROM exam_marks WHERE examId = :examId ORDER BY studentName ASC")
+    suspend fun getMarksByExam(examId: String): List<ExamMarkRecord>
+
+    @Query("SELECT * FROM exam_marks WHERE studentId = :studentId ORDER BY examDate DESC, timestamp DESC")
+    fun getMarksByStudentFlow(studentId: String): Flow<List<ExamMarkRecord>>
+
+    @Query("SELECT * FROM exam_marks WHERE studentId = :studentId ORDER BY examDate DESC, timestamp DESC")
+    suspend fun getMarksByStudent(studentId: String): List<ExamMarkRecord>
+
+    @Query("SELECT * FROM exam_marks WHERE examId = :examId AND studentId = :studentId LIMIT 1")
+    suspend fun getMarkByExamAndStudent(examId: String, studentId: String): ExamMarkRecord?
+
+    @Query("SELECT * FROM exam_marks WHERE id = :id LIMIT 1")
+    suspend fun getMarkById(id: String): ExamMarkRecord?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMark(record: ExamMarkRecord)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMarks(records: List<ExamMarkRecord>)
+
+    @Update
+    suspend fun updateMark(record: ExamMarkRecord)
+
+    @Query("DELETE FROM exam_marks WHERE id = :id")
+    suspend fun deleteMarkById(id: String)
+
+    @Query("DELETE FROM exam_marks WHERE examId = :examId")
+    suspend fun deleteMarksByExamId(examId: String)
+
+    @Query("DELETE FROM exam_marks WHERE studentId = :studentId")
+    suspend fun deleteMarksByStudentId(studentId: String)
+}
+
+@Dao
 interface SyncCleanupDao {
     @Query("DELETE FROM students")
     suspend fun clearAllStudents()
@@ -389,5 +542,20 @@ interface SyncCleanupDao {
 
     @Query("DELETE FROM announcements")
     suspend fun clearAllAnnouncements()
+
+    @Query("DELETE FROM namaz_logs")
+    suspend fun clearAllNamazLogs()
+
+    @Query("DELETE FROM madni_qaida_logs")
+    suspend fun clearAllQaidaLogs()
+
+    @Query("DELETE FROM leave_requests")
+    suspend fun clearAllLeaveRequests()
+
+    @Query("DELETE FROM exams")
+    suspend fun clearAllExams()
+
+    @Query("DELETE FROM exam_marks")
+    suspend fun clearAllExamMarks()
 }
 

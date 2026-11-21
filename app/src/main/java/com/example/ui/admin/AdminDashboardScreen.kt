@@ -187,9 +187,9 @@ fun AdminDashboardScreen(
                     onClick = { onNavigateTab(1) }
                 )
                 MetricStatCard(
-                    title = "Today Attendance",
+                    title = "Attendance & Leaves",
                     value = String.format(Locale.US, "%.0f%%", metrics.todayAttendancePercent),
-                    subtitle = "${metrics.todayAttendancePresent} Present",
+                    subtitle = "${metrics.todayAttendancePresent} Present • ${metrics.pendingLeavesCount} Leaves",
                     icon = Icons.Default.FactCheck,
                     containerColor = Color(0xFFD1E7DD),
                     contentColor = Color(0xFF0F5132),
@@ -270,6 +270,56 @@ fun AdminDashboardScreen(
                         imageVector = Icons.Default.ChevronRight,
                         contentDescription = "Open FS",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        }
+
+        // Exams Management & Result Cards Banner
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateTab(10) }
+                    .testTag("dashboard_exams_btn"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2FE))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Assessment,
+                            contentDescription = null,
+                            tint = Color(0xFF0369A1),
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Exams, Marks & PDF Result Cards",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFF0C4A6E)
+                            )
+                            Text(
+                                text = "Manage Tests, Mid & Final Exams • Upload Marks • Print Student Result Cards & Class Reports",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF0369A1)
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Open Exams Management",
+                        tint = Color(0xFF0369A1)
                     )
                 }
             }

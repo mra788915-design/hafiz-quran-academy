@@ -6,10 +6,12 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.base.FirestoreEmulatorTestBase
 import com.example.data.local.AcademyDatabase
 import com.example.data.models.Announcement
+import com.example.data.models.ApprovalStatus
 import com.example.data.models.AttendanceRecord
 import com.example.data.models.AttendanceStatus
 import com.example.data.models.ChallanStatus
 import com.example.data.models.FeeChallan
+import com.example.data.models.NamazProgressRating
 import com.example.data.models.QuranProgressRating
 import com.example.data.models.QuranProgressRecord
 import com.example.data.models.Student
@@ -567,7 +569,7 @@ class FirestoreCloudRepositoryRuleTest : FirestoreEmulatorTestBase() {
             assertEquals("Hifz-ul-Quran Al-Kareem (Complete 30 Juz)", cloudFetched.completedCourse)
             assertEquals("HQA-SANAD-2026-$suffix", cloudFetched.certificateNumber)
 
-            val previewBitmap = CertificatePrintHelper.renderCertificateBitmap(cloudFetched, scale = 1f)
+            val previewBitmap = CertificatePrintHelper.renderCertificateBitmap(cloudFetched, scale = 1f, context = context)
             assertEquals(842, previewBitmap.width)
             assertEquals(595, previewBitmap.height)
 
@@ -580,6 +582,255 @@ class FirestoreCloudRepositoryRuleTest : FirestoreEmulatorTestBase() {
             }
         } finally {
             localDb.close()
+        }
+    }
+
+    @Test
+    fun teacherLogsNamazAndMadniQaida_andParentSubmitsLeave_whichTeacherAndAdminApproveIntoAttendance(): Unit = runBlocking {
+        ensureAdminBootstrapped()
+
+        val teacherLocalDb = createInMemoryDb()
+        val parentLocalDb = createInMemoryDb()
+        val adminLocalDb = createInMemoryDb()
+        try {
+            // 1. Sign in as Qari Abdullah (Teacher of std_bilal_0101 in cls_hifz_1)
+            val teacherUid = signInTestUser(TEACHER_EMAIL)
+            val teacherCloudRepo = FirestoreCloudRepository(firestore)
+            val teacherClaim = withTimeout(DEFAULT_TIMEOUT_MS) {
+                teacherCloudRepo.authenticateAndClaimSession(
+                    uid = teacherUid,
+                    email = TEACHER_EMAIL,
+                    usernameInput = "qari.abdullah",
+                    passwordInput = "Tchr@101",
+                    requiredRole = UserRole.TEACHER
+                ).getOrThrow()
+            }
+            val teacherSyncJob = launch {
+                teacherCloudRepo.syncRoleDataRealtime(
+                    uid = teacherUid,
+                    profile = teacherClaim,
+                    localDb = teacherLocalDb,
+                    onSessionRevoked = {},
+                    onProfileUpdated = {}
+                )
+            }
+            withTimeout(FLOW_TIMEOUT_MS) {
+                teacherLocalDb.studentDao().getAllStudentsFlow().first { list -> list.any { it.id == "std_bilal_0101" } }
+            }
+
+            val teacherAcademyRepo = AcademyRepository(teacherLocalDb, teacherCloudRepo).apply {
+                activeCloudUid = teacherUid
+            }
+
+            // Record, Update, and Delete Namaz Log & Madni Qaida Log
+            val namazRec = withTimeout(DEFAULT_TIMEOUT_MS) {
+                teacherAcademyRepo.recordNamazLog(
+                    studentId = "std_bilal_0101",
+                    teacherId = "tchr_qari_abdullah",
+                    teacherName = "Qari Muhammad Abdullah",
+                    date = "2026-11-18",
+                    prayerName = "Fajr",
+                    duaOrSurahTopic = "Dua-e-Qunoot & Sana",
+                    rating = NamazProgressRating.EXCELLENT,
+                    wuduAndPostureNotes = "Complete Sunnah Wudu & calm Ruku/Sajdah",
+                    teacherRemarks = "MashaAllah very punctual",
+                    nextTarget = "Masnoon Dua after Adhan"
+                ).getOrThrow()
+            }
+            val updatedNamaz = withTimeout(DEFAULT_TIMEOUT_MS) {
+                teacherAcademyRepo.updateNamazLog(namazRec.copy(teacherRemarks = "Updated Fajr remarks")).getOrThrow()
+            }
+            assertEquals("Updated Fajr remarks", updatedNamaz.teacherRemarks)
+
+            val qaidaRec = withTimeout(DEFAULT_TIMEOUT_MS) {
+                teacherAcademyRepo.recordMadniQaidaLog(
+                    studentId = "std_bilal_0101",
+                    teacherId = "tchr_qari_abdullah",
+                    teacherName = "Qari Muhammad Abdullah",
+                    date = "2026-11-18",
+                    lessonNumber = 12,
+                    lessonTitle = "Lesson 12: Tashdeed (Shaddah)",
+                    pageNumber = 28,
+                    linesCovered = "Lines 1-6",
+                    rating = QuranProgressRating.VERY_GOOD,
+                    revisionSummary = "Lesson 11 passed",
+                    mistakesCount = 1,
+                    teacherRemarks = "Strong Makharij",
+                    nextTarget = "Lesson 13 Page 30"
+                ).getOrThrow()
+            }
+            val updatedQaida = withTimeout(DEFAULT_TIMEOUT_MS) {
+                teacherAcademyRepo.updateMadniQaidaLog(qaidaRec.copy(mistakesCount = 0)).getOrThrow()
+            }
+            assertEquals(0, updatedQaida.mistakesCount)
+
+            teacherSyncJob.cancelAndJoin()
+
+            // 2. Sign in as Bilal's Parent (p.farooq), verify synced Namaz & Qaida logs, and submit 2 leave requests
+            val parentUid = signInTestUser(PARENT_1_EMAIL)
+            val parentCloudRepo = FirestoreCloudRepository(firestore)
+            val parentClaim = withTimeout(DEFAULT_TIMEOUT_MS) {
+                parentCloudRepo.authenticateAndClaimSession(
+                    uid = parentUid,
+                    email = PARENT_1_EMAIL,
+                    usernameInput = "p.farooq",
+                    passwordInput = "Prnt@101",
+                    requiredRole = UserRole.PARENT
+                ).getOrThrow()
+            }
+            val parentSyncJob = launch {
+                parentCloudRepo.syncRoleDataRealtime(
+                    uid = parentUid,
+                    profile = parentClaim,
+                    localDb = parentLocalDb,
+                    onSessionRevoked = {},
+                    onProfileUpdated = {}
+                )
+            }
+            withTimeout(FLOW_TIMEOUT_MS) {
+                parentLocalDb.namazLogDao().getNamazLogsByStudentFlow("std_bilal_0101").first { list ->
+                    list.any { it.id == namazRec.id }
+                }
+                parentLocalDb.madniQaidaLogDao().getQaidaLogsByStudentFlow("std_bilal_0101").first { list ->
+                    list.any { it.id == qaidaRec.id }
+                }
+            }
+
+            val parentAcademyRepo = AcademyRepository(parentLocalDb, parentCloudRepo).apply {
+                activeCloudUid = parentUid
+            }
+            val leaveForTeacherApprove = withTimeout(DEFAULT_TIMEOUT_MS) {
+                parentAcademyRepo.submitLeaveRequest(
+                    studentId = "std_bilal_0101",
+                    parentUid = parentUid,
+                    parentName = "Farooq Ahmed",
+                    leaveType = "Sick / Medical",
+                    fromDate = "2026-11-20",
+                    toDate = "2026-11-21",
+                    reason = "High fever, rest advised"
+                ).getOrThrow()
+            }
+            assertEquals(ApprovalStatus.PENDING, leaveForTeacherApprove.status)
+
+            val leaveForAdminReject = withTimeout(DEFAULT_TIMEOUT_MS) {
+                parentAcademyRepo.submitLeaveRequest(
+                    studentId = "std_bilal_0101",
+                    parentUid = parentUid,
+                    parentName = "Farooq Ahmed",
+                    leaveType = "Out of Station",
+                    fromDate = "2026-11-25",
+                    toDate = "2026-11-25",
+                    reason = "Family travel"
+                ).getOrThrow()
+            }
+
+            // Parent MUST NOT be able to approve their own leave request
+            val selfApproveAttempt = withTimeout(DEFAULT_TIMEOUT_MS) {
+                runCatching {
+                    parentCloudRepo.reviewLeaveRequestCloud(
+                        leaveId = leaveForTeacherApprove.id,
+                        approved = true,
+                        reviewerName = "Farooq",
+                        reviewerRole = "PARENT",
+                        reviewedDate = "2026-11-18",
+                        reviewerRemarks = "Self approve hack"
+                    )
+                }
+            }
+            assertTrue("Parent self-approve should be rejected", selfApproveAttempt.isFailure)
+            parentSyncJob.cancelAndJoin()
+
+            // 3. Sign back in as Teacher -> Approve first leave -> verify APPROVED + Attendance LEAVE created
+            signInTestUser(TEACHER_EMAIL)
+            val teacherSyncJob2 = launch {
+                teacherCloudRepo.syncRoleDataRealtime(
+                    uid = teacherUid,
+                    profile = teacherClaim,
+                    localDb = teacherLocalDb,
+                    onSessionRevoked = {},
+                    onProfileUpdated = {}
+                )
+            }
+            withTimeout(FLOW_TIMEOUT_MS) {
+                teacherLocalDb.leaveRequestDao().getAllLeaveRequestsFlow().first { list ->
+                    list.any { it.id == leaveForTeacherApprove.id }
+                }
+            }
+            val approvedLeave = withTimeout(DEFAULT_TIMEOUT_MS) {
+                teacherAcademyRepo.reviewLeaveRequest(
+                    leaveId = leaveForTeacherApprove.id,
+                    approved = true,
+                    reviewerName = "Qari Muhammad Abdullah",
+                    reviewerRole = "TEACHER",
+                    reviewerRemarks = "Get well soon"
+                ).getOrThrow()
+            }
+            assertEquals(ApprovalStatus.APPROVED, approvedLeave.status)
+
+            val attDay1 = teacherLocalDb.attendanceDao().getAllAttendanceFlow().first()
+                .firstOrNull { it.studentId == "std_bilal_0101" && it.date == "2026-11-20" }
+            val attDay2 = teacherLocalDb.attendanceDao().getAllAttendanceFlow().first()
+                .firstOrNull { it.studentId == "std_bilal_0101" && it.date == "2026-11-21" }
+            assertEquals(AttendanceStatus.LEAVE, attDay1?.status)
+            assertEquals(AttendanceStatus.LEAVE, attDay2?.status)
+
+            // Clean up Namaz & Qaida logs and auto-attendance
+            withTimeout(DEFAULT_TIMEOUT_MS) {
+                teacherAcademyRepo.deleteNamazLog(namazRec.id)
+                teacherAcademyRepo.deleteMadniQaidaLog(qaidaRec.id)
+                attDay1?.let { teacherAcademyRepo.deleteAttendanceRecord(it.id) }
+                attDay2?.let { teacherAcademyRepo.deleteAttendanceRecord(it.id) }
+            }
+            teacherSyncJob2.cancelAndJoin()
+
+            // 4. Sign in as Admin -> Reject second leave & clean up both leave requests
+            val (adminUid, adminCloudRepo) = ensureAdminBootstrapped()
+            val adminClaim = withTimeout(DEFAULT_TIMEOUT_MS) {
+                adminCloudRepo.authenticateAndClaimSession(
+                    uid = adminUid,
+                    email = ADMIN_EMAIL,
+                    usernameInput = "admin",
+                    passwordInput = "Admin@123",
+                    requiredRole = UserRole.ADMIN
+                ).getOrThrow()
+            }
+            val adminSyncJob = launch {
+                adminCloudRepo.syncRoleDataRealtime(
+                    uid = adminUid,
+                    profile = adminClaim,
+                    localDb = adminLocalDb,
+                    onSessionRevoked = {},
+                    onProfileUpdated = {}
+                )
+            }
+            withTimeout(FLOW_TIMEOUT_MS) {
+                adminLocalDb.leaveRequestDao().getAllLeaveRequestsFlow().first { list ->
+                    list.any { it.id == leaveForAdminReject.id }
+                }
+            }
+            val adminAcademyRepo = AcademyRepository(adminLocalDb, adminCloudRepo).apply {
+                activeCloudUid = adminUid
+            }
+            val rejectedLeave = withTimeout(DEFAULT_TIMEOUT_MS) {
+                adminAcademyRepo.reviewLeaveRequest(
+                    leaveId = leaveForAdminReject.id,
+                    approved = false,
+                    reviewerName = "Muhammad Rizwan",
+                    reviewerRole = "ADMIN",
+                    reviewerRemarks = "Please attend oral assessment first"
+                ).getOrThrow()
+            }
+            assertEquals(ApprovalStatus.REJECTED, rejectedLeave.status)
+
+            withTimeout(DEFAULT_TIMEOUT_MS) {
+                adminAcademyRepo.deleteLeaveRequest(leaveForTeacherApprove.id)
+                adminAcademyRepo.deleteLeaveRequest(leaveForAdminReject.id)
+            }
+            adminSyncJob.cancelAndJoin()
+        } finally {
+            teacherLocalDb.close()
+            parentLocalDb.close()
+            adminLocalDb.close()
         }
     }
 

@@ -20,13 +20,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.models.*
 import com.example.ui.AcademyViewModel
+import com.example.ui.admin.MadniQaidaLogCardItem
+import com.example.ui.admin.NamazLogCardItem
 import com.example.ui.admin.QuranProgressCardItem
+import com.example.ui.admin.StudentExamMarkRowCard
+import com.example.ui.admin.StudentOverallPerformanceSummaryCard
 import com.example.ui.components.AttendanceStatusChip
 import com.example.ui.components.CertificatePreviewAndPrintDialog
 import com.example.ui.components.ChallanStatusBadge
 import com.example.ui.components.EmptyPlaceholderCard
+import com.example.ui.components.LeaveRequestCardItem
 import com.example.ui.components.OnlinePaymentQrDialog
+import com.example.ui.components.SubmitLeaveRequestDialog
 import com.example.util.ChallanPdfGenerator
+import com.example.util.ExamReportPdfGenerator
 import java.text.NumberFormat
 import java.util.*
 
@@ -52,6 +59,8 @@ fun ParentPortalMainScreen(
     }
 
     var selectedTab by remember { mutableStateOf(0) }
+    var selectedLogSubTab by remember { mutableStateOf(0) } // 0: Quran, 1: Namaz, 2: Madni Qaida
+    var showSubmitLeaveDialog by remember { mutableStateOf(false) }
     var challanForOnlineQrPay by remember { mutableStateOf<FeeChallan?>(null) }
     var showChildCertificatePreview by remember { mutableStateOf(false) }
     val formatter = remember { NumberFormat.getNumberInstance(Locale.US) }
@@ -61,8 +70,23 @@ fun ParentPortalMainScreen(
         else kotlinx.coroutines.flow.flowOf(emptyList())
     }.collectAsState(initial = emptyList())
 
+    val childNamazLogs by remember(selectedChild) {
+        if (selectedChild != null) viewModel.repository.getNamazLogsByStudent(selectedChild!!.id)
+        else kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+
+    val childQaidaLogs by remember(selectedChild) {
+        if (selectedChild != null) viewModel.repository.getQaidaLogsByStudent(selectedChild!!.id)
+        else kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+
     val childAttendance by remember(selectedChild) {
         if (selectedChild != null) viewModel.repository.getAttendanceByStudent(selectedChild!!.id)
+        else kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+
+    val childLeaves by remember(selectedChild) {
+        if (selectedChild != null) viewModel.repository.getLeavesByStudent(selectedChild!!.id)
         else kotlinx.coroutines.flow.flowOf(emptyList())
     }.collectAsState(initial = emptyList())
 
@@ -70,6 +94,12 @@ fun ParentPortalMainScreen(
         if (selectedChild != null) viewModel.repository.getChallansByStudent(selectedChild!!.id)
         else kotlinx.coroutines.flow.flowOf(emptyList())
     }.collectAsState(initial = emptyList())
+
+    val childExamMarks by remember(selectedChild) {
+        if (selectedChild != null) viewModel.repository.getMarksByStudent(selectedChild!!.id)
+        else kotlinx.coroutines.flow.flowOf(emptyList())
+    }.collectAsState(initial = emptyList())
+    var parentExamFilter by remember { mutableStateOf<ExamType?>(null) }
 
     Column(modifier = modifier.fillMaxSize()) {
         // Parent & Child Header Banner
@@ -204,64 +234,244 @@ fun ParentPortalMainScreen(
             )
         }
 
-        TabRow(selectedTabIndex = selectedTab) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Quran") })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Attendance") })
-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Fee Challan") })
-            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Notices") })
+        ScrollableTabRow(
+            selectedTabIndex = selectedTab,
+            edgePadding = 8.dp
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("Logs", fontSize = 12.sp, maxLines = 1) },
+                modifier = Modifier.testTag("parent_tab_logs")
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("Att & Leave", fontSize = 12.sp, maxLines = 1) },
+                modifier = Modifier.testTag("parent_tab_att_leave")
+            )
+            Tab(
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
+                text = { Text("Fee Challan", fontSize = 12.sp, maxLines = 1) },
+                modifier = Modifier.testTag("parent_tab_challan")
+            )
+            Tab(
+                selected = selectedTab == 3,
+                onClick = { selectedTab = 3 },
+                text = { Text("Notices", fontSize = 12.sp, maxLines = 1) },
+                modifier = Modifier.testTag("parent_tab_notices")
+            )
+            Tab(
+                selected = selectedTab == 4,
+                onClick = { selectedTab = 4 },
+                text = { Text("Exams (${childExamMarks.size})", fontSize = 12.sp, maxLines = 1) },
+                modifier = Modifier.testTag("parent_tab_exams")
+            )
         }
 
         when (selectedTab) {
             0 -> {
-                if (childProgress.isEmpty()) {
-                    EmptyPlaceholderCard(
-                        title = "No Quran recitation records yet",
-                        subtitle = "Today's lesson update will be posted by the Halaqah teacher.",
-                        icon = Icons.Default.AutoStories
-                    )
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(16.dp),
-                        modifier = Modifier.fillMaxSize()
+                Column(modifier = Modifier.fillMaxSize()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
                     ) {
                         item {
-                            val latest = childProgress.first()
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(
-                                        text = "Current Hifz Status",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Juz (Para) ${latest.juzNumber} • ${latest.surahName}",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Last Sabaq: Ayat ${latest.sabaqAyatStart} - ${latest.sabaqAyatEnd}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                    if (latest.nextTarget.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "Next Target: ${latest.nextTarget}",
-                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                            FilterChip(
+                                selected = selectedLogSubTab == 0,
+                                onClick = { selectedLogSubTab = 0 },
+                                leadingIcon = { Icon(Icons.Default.AutoStories, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                label = { Text("Quran (${childProgress.size})", fontSize = 12.sp) },
+                                modifier = Modifier.testTag("parent_subtab_quran")
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = selectedLogSubTab == 1,
+                                onClick = { selectedLogSubTab = 1 },
+                                leadingIcon = { Icon(Icons.Default.Mosque, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                label = { Text("Namaz (${childNamazLogs.size})", fontSize = 12.sp) },
+                                modifier = Modifier.testTag("parent_subtab_namaz")
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = selectedLogSubTab == 2,
+                                onClick = { selectedLogSubTab = 2 },
+                                leadingIcon = { Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                label = { Text("Madni Qaida (${childQaidaLogs.size})", fontSize = 12.sp) },
+                                modifier = Modifier.testTag("parent_subtab_qaida")
+                            )
+                        }
+                    }
+
+                    when (selectedLogSubTab) {
+                        0 -> {
+                            if (childProgress.isEmpty()) {
+                                EmptyPlaceholderCard(
+                                    title = "No Quran recitation records yet",
+                                    subtitle = "Today's lesson update will be posted by the Halaqah teacher.",
+                                    icon = Icons.Default.AutoStories
+                                )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    item {
+                                        val latest = childProgress.first()
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp)) {
+                                                Text(
+                                                    text = "Current Quran / Hifz Status",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Juz (Para) ${latest.juzNumber} • ${latest.surahName}",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Last Sabaq: Ayat ${latest.sabaqAyatStart} - ${latest.sabaqAyatEnd}",
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                if (latest.nextTarget.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "Next Target: ${latest.nextTarget}",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    items(childProgress, key = { it.id }) { rec ->
+                                        QuranProgressCardItem(rec)
                                     }
                                 }
                             }
                         }
+                        1 -> {
+                            if (childNamazLogs.isEmpty()) {
+                                EmptyPlaceholderCard(
+                                    title = "No Namaz & Dua logs yet",
+                                    subtitle = "Daily Salah, Wudu, and Masnoon Duas updates from the Teacher will appear here.",
+                                    icon = Icons.Default.Mosque
+                                )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    item {
+                                        val latest = childNamazLogs.first()
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFD1E7DD))
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp)) {
+                                                Text(
+                                                    text = "Latest Namaz & Tarbiyah Update",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = Color(0xFF0F5132)
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "${latest.prayerName} • ${latest.date}",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = Color(0xFF0F5132)
+                                                )
+                                                if (latest.duaOrSurahTopic.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "Topic: ${latest.duaOrSurahTopic}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = Color(0xFF0F5132)
+                                                    )
+                                                }
+                                                if (latest.nextTarget.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "Next Target: ${latest.nextTarget}",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = Color(0xFF0F5132)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
 
-                        items(childProgress) { rec ->
-                            QuranProgressCardItem(rec)
+                                    items(childNamazLogs, key = { it.id }) { rec ->
+                                        NamazLogCardItem(rec)
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            if (childQaidaLogs.isEmpty()) {
+                                EmptyPlaceholderCard(
+                                    title = "No Madni Qaida logs yet",
+                                    subtitle = "Madni Qaida Sabaq, Page, and Tajweed progress updates will appear here.",
+                                    icon = Icons.Default.MenuBook
+                                )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    item {
+                                        val latest = childQaidaLogs.first()
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp)) {
+                                                Text(
+                                                    text = "Current Madni Qaida Progress",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = latest.lessonTitle,
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Sabaq #${latest.lessonNumber} • Page ${latest.pageNumber} (${latest.linesCovered})",
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                if (latest.nextTarget.isNotBlank()) {
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "Next Target: ${latest.nextTarget}",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    items(childQaidaLogs, key = { it.id }) { rec ->
+                                        MadniQaidaLogCardItem(rec)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -276,6 +486,21 @@ fun ParentPortalMainScreen(
                     contentPadding = PaddingValues(16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
+                    item {
+                        Button(
+                            onClick = { showSubmitLeaveDialog = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("parent_apply_leave_btn"),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.EventBusy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Request Student Leave (Chutti Application)", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -297,12 +522,48 @@ fun ParentPortalMainScreen(
                         }
                     }
 
+                    item {
+                        Text(
+                            text = "Leave Applications (${childLeaves.size})",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+
+                    if (childLeaves.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No leave requests submitted yet. Tap 'Request Student Leave' above if your child cannot attend academy.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        items(childLeaves, key = { it.id }) { leave ->
+                            LeaveRequestCardItem(
+                                leave = leave,
+                                showReviewerActions = false,
+                                showCancelOrDeleteAction = leave.status == ApprovalStatus.PENDING,
+                                deleteLabel = "Cancel Request",
+                                onDelete = { viewModel.deleteLeaveRequest(leave.id) }
+                            )
+                        }
+                    }
+
+                    item {
+                        Text(
+                            text = "Daily Attendance History",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+
                     if (childAttendance.isEmpty()) {
                         item {
                             Text("No attendance recorded yet.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
-                        items(childAttendance) { att ->
+                        items(childAttendance, key = { it.id }) { att ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp),
@@ -527,6 +788,89 @@ fun ParentPortalMainScreen(
                     }
                 }
             }
+            4 -> {
+                val activeChild = selectedChild
+                if (activeChild == null) {
+                    EmptyPlaceholderCard(
+                        title = "Select a child",
+                        subtitle = "Choose your child above to view their Tests, Mid Exams, Final Exams & Result Card.",
+                        icon = Icons.Default.Assessment
+                    )
+                } else {
+                    val filteredMarks = remember(childExamMarks, parentExamFilter) {
+                        if (parentExamFilter == null) childExamMarks
+                        else childExamMarks.filter { it.examType == parentExamFilter }
+                    }
+                    val filterLabel = parentExamFilter?.displayLabel ?: "All Tests, Mid & Final Exams"
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(16.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        item {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                item {
+                                    FilterChip(
+                                        selected = parentExamFilter == null,
+                                        onClick = { parentExamFilter = null },
+                                        label = { Text("All (${childExamMarks.size})") }
+                                    )
+                                }
+                                items(ExamType.values()) { t ->
+                                    val cnt = childExamMarks.count { it.examType == t }
+                                    FilterChip(
+                                        selected = parentExamFilter == t,
+                                        onClick = { parentExamFilter = t },
+                                        label = { Text("${t.shortLabel} ($cnt)") }
+                                    )
+                                }
+                            }
+                        }
+
+                        item {
+                            StudentOverallPerformanceSummaryCard(
+                                student = activeChild,
+                                marks = filteredMarks,
+                                onPrintResultCard = {
+                                    ExamReportPdfGenerator.printStudentResultCard(
+                                        context = context,
+                                        student = activeChild,
+                                        marks = filteredMarks,
+                                        filterTitle = filterLabel,
+                                        settings = settings
+                                    )
+                                },
+                                onShareResultCard = {
+                                    ExamReportPdfGenerator.shareStudentResultCardPdf(
+                                        context = context,
+                                        student = activeChild,
+                                        marks = filteredMarks,
+                                        filterTitle = filterLabel,
+                                        settings = settings
+                                    )
+                                },
+                                printButtonTag = "parent_print_result_card_btn",
+                                shareButtonTag = "parent_share_result_card_btn"
+                            )
+                        }
+
+                        if (filteredMarks.isEmpty()) {
+                            item {
+                                EmptyPlaceholderCard(
+                                    title = "No exam marks uploaded yet",
+                                    subtitle = "Once your child's Ustadh or Administration uploads Test, Mid, or Final Exam marks, they will appear here.",
+                                    icon = Icons.Default.Assessment
+                                )
+                            }
+                        } else {
+                            items(filteredMarks, key = { it.id }) { mark ->
+                                StudentExamMarkRowCard(mark = mark, onDelete = null)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -539,6 +883,19 @@ fun ParentPortalMainScreen(
             onSubmitOnlinePayment = { amount, method, tid, remarks ->
                 viewModel.recordPayment(ch.id, amount, method, remarks, tid) {
                     challanForOnlineQrPay = null
+                }
+            }
+        )
+    }
+
+    if (showSubmitLeaveDialog && myChildren.isNotEmpty()) {
+        SubmitLeaveRequestDialog(
+            children = myChildren,
+            initialChild = selectedChild,
+            onDismiss = { showSubmitLeaveDialog = false },
+            onSubmit = { studentId, leaveType, fromDate, toDate, reason ->
+                viewModel.submitLeaveRequest(studentId, leaveType, fromDate, toDate, reason) {
+                    showSubmitLeaveDialog = false
                 }
             }
         )

@@ -275,7 +275,7 @@ fun CertificatePreviewAndPrintDialog(
         student.teacherName,
         student.certificateRemarks
     ) {
-        CertificatePrintHelper.renderCertificateBitmap(student, settings, scale = 2f)
+        CertificatePrintHelper.renderCertificateBitmap(student, settings, scale = 2f, context = context)
     }
 
     Dialog(

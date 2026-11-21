@@ -200,6 +200,84 @@ object FirestoreCloudMappers {
         )
     }
 
+    fun DocumentSnapshot.toNamazLogRecord(): NamazLogRecord? {
+        if (!exists()) return null
+        val rating = runCatching {
+            NamazProgressRating.valueOf(getString("rating") ?: "PRACTICED_GOOD")
+        }.getOrDefault(NamazProgressRating.PRACTICED_GOOD)
+        return NamazLogRecord(
+            id = getString("logId") ?: id,
+            date = getString("date") ?: "",
+            studentId = getString("studentId") ?: "",
+            studentName = getString("studentName") ?: "",
+            admissionNumber = getString("admissionNumber") ?: "",
+            teacherId = getString("teacherId") ?: "",
+            teacherName = getString("teacherName") ?: "",
+            prayerName = getString("prayerName") ?: "5 Prayers Check",
+            duaOrSurahTopic = getString("duaOrSurahTopic") ?: "",
+            rating = rating,
+            wuduAndPostureNotes = getString("wuduAndPostureNotes") ?: "",
+            teacherRemarks = getString("teacherRemarks") ?: "",
+            nextTarget = getString("nextTarget") ?: "",
+            timestamp = getEpochMillis("updatedAt")
+        )
+    }
+
+    fun DocumentSnapshot.toMadniQaidaLogRecord(): MadniQaidaLogRecord? {
+        if (!exists()) return null
+        val rating = runCatching {
+            QuranProgressRating.valueOf(getString("rating") ?: "GOOD")
+        }.getOrDefault(QuranProgressRating.GOOD)
+        return MadniQaidaLogRecord(
+            id = getString("logId") ?: id,
+            date = getString("date") ?: "",
+            studentId = getString("studentId") ?: "",
+            studentName = getString("studentName") ?: "",
+            admissionNumber = getString("admissionNumber") ?: "",
+            teacherId = getString("teacherId") ?: "",
+            teacherName = getString("teacherName") ?: "",
+            lessonNumber = (getLong("lessonNumber") ?: 1L).toInt(),
+            lessonTitle = getString("lessonTitle") ?: "Lesson 1: Huroof-e-Mufridat",
+            pageNumber = (getLong("pageNumber") ?: 1L).toInt(),
+            linesCovered = getString("linesCovered") ?: "Lines 1-6",
+            rating = rating,
+            revisionSummary = getString("revisionSummary") ?: "",
+            mistakesCount = (getLong("mistakesCount") ?: 0L).toInt(),
+            teacherRemarks = getString("teacherRemarks") ?: "",
+            nextTarget = getString("nextTarget") ?: "",
+            timestamp = getEpochMillis("updatedAt")
+        )
+    }
+
+    fun DocumentSnapshot.toLeaveRequest(): LeaveRequest? {
+        if (!exists()) return null
+        val status = runCatching {
+            ApprovalStatus.valueOf(getString("status") ?: "PENDING")
+        }.getOrDefault(ApprovalStatus.PENDING)
+        return LeaveRequest(
+            id = getString("leaveId") ?: id,
+            studentId = getString("studentId") ?: "",
+            studentName = getString("studentName") ?: "",
+            admissionNumber = getString("admissionNumber") ?: "",
+            classId = getString("classId") ?: "",
+            className = getString("className") ?: "",
+            teacherId = getString("teacherId") ?: "",
+            parentUid = getString("parentUid") ?: "",
+            parentName = getString("parentName") ?: "",
+            leaveType = getString("leaveType") ?: "Sick / Medical",
+            fromDate = getString("fromDate") ?: "",
+            toDate = getString("toDate") ?: "",
+            reason = getString("reason") ?: "",
+            status = status,
+            reviewerName = getString("reviewerName") ?: "",
+            reviewerRole = getString("reviewerRole") ?: "",
+            reviewedDate = getString("reviewedDate") ?: "",
+            reviewerRemarks = getString("reviewerRemarks") ?: "",
+            createdAt = getEpochMillis("createdAt"),
+            updatedAt = getEpochMillis("updatedAt")
+        )
+    }
+
     fun DocumentSnapshot.toFeeChallan(): FeeChallan? {
         if (!exists()) return null
         val status = runCatching {
@@ -290,6 +368,59 @@ object FirestoreCloudMappers {
             priority = getString("priority") ?: "Normal",
             authorName = getString("authorName") ?: "Hafiz Quran Academy",
             timestamp = getEpochMillis("createdAt")
+        )
+    }
+
+    fun DocumentSnapshot.toAcademyExam(): AcademyExam? {
+        if (!exists()) return null
+        val type = runCatching {
+            ExamType.valueOf(getString("examType") ?: "TEST")
+        }.getOrDefault(ExamType.TEST)
+        return AcademyExam(
+            id = getString("examId") ?: id,
+            title = getString("title") ?: "",
+            examType = type,
+            subjectName = getString("subjectName") ?: "Hifz / Nazra & Tajweed",
+            classId = getString("classId") ?: "",
+            className = getString("className") ?: "",
+            academicTerm = getString("academicTerm") ?: "2026-2027",
+            examDate = getString("examDate") ?: "",
+            totalMarks = getDouble("totalMarks") ?: 100.0,
+            passingMarks = getDouble("passingMarks") ?: 40.0,
+            instructions = getString("instructions") ?: "",
+            createdByAdminName = getString("createdByAdminName") ?: "Administration",
+            createdAt = getEpochMillis("createdAt"),
+            updatedAt = getEpochMillis("updatedAt")
+        )
+    }
+
+    fun DocumentSnapshot.toExamMarkRecord(): ExamMarkRecord? {
+        if (!exists()) return null
+        val type = runCatching {
+            ExamType.valueOf(getString("examType") ?: "TEST")
+        }.getOrDefault(ExamType.TEST)
+        return ExamMarkRecord(
+            id = getString("markId") ?: id,
+            examId = getString("examId") ?: "",
+            examTitle = getString("examTitle") ?: "",
+            examType = type,
+            subjectName = getString("subjectName") ?: "",
+            examDate = getString("examDate") ?: "",
+            academicTerm = getString("academicTerm") ?: "2026-2027",
+            classId = getString("classId") ?: "",
+            className = getString("className") ?: "",
+            studentId = getString("studentId") ?: "",
+            studentName = getString("studentName") ?: "",
+            admissionNumber = getString("admissionNumber") ?: "",
+            obtainedMarks = getDouble("obtainedMarks") ?: 0.0,
+            totalMarks = getDouble("totalMarks") ?: 100.0,
+            passingMarks = getDouble("passingMarks") ?: 40.0,
+            grade = getString("grade") ?: "",
+            isAbsent = getBoolean("isAbsent") ?: false,
+            remarks = getString("remarks") ?: "",
+            gradedByTeacherId = getString("gradedByTeacherId") ?: "",
+            gradedByTeacherName = getString("gradedByTeacherName") ?: "",
+            timestamp = getEpochMillis("updatedAt")
         )
     }
 
@@ -390,8 +521,12 @@ object FirestoreCloudMappers {
         adminUid: String,
         recentAttIds: List<String> = emptyList(),
         recentProgIds: List<String> = emptyList(),
+        recentNamazIds: List<String> = emptyList(),
+        recentQaidaIds: List<String> = emptyList(),
+        recentLeaveIds: List<String> = emptyList(),
         recentChallanIds: List<String> = emptyList(),
         recentPaymentIds: List<String> = emptyList(),
+        recentExamMarkIds: List<String> = emptyList(),
         existingCreatedAt: Timestamp? = null
     ): Map<String, Any> = mapOf(
         "studentId" to sanitizeId(s.id),
@@ -424,8 +559,12 @@ object FirestoreCloudMappers {
         "certificateRemarks" to s.certificateRemarks.take(350),
         "recentAttendanceIds" to recentAttIds.map { sanitizeId(it) }.distinct().take(40),
         "recentProgressIds" to recentProgIds.map { sanitizeId(it) }.distinct().take(30),
+        "recentNamazIds" to recentNamazIds.map { sanitizeId(it) }.distinct().take(30),
+        "recentQaidaIds" to recentQaidaIds.map { sanitizeId(it) }.distinct().take(30),
+        "recentLeaveIds" to recentLeaveIds.map { sanitizeId(it) }.distinct().take(24),
         "recentChallanIds" to recentChallanIds.map { sanitizeId(it) }.distinct().take(24),
         "recentPaymentIds" to recentPaymentIds.map { sanitizeId(it) }.distinct().take(24),
+        "recentExamMarkIds" to recentExamMarkIds.map { sanitizeId(it) }.distinct().take(60),
         "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
         "updatedAt" to FieldValue.serverTimestamp()
     )
@@ -478,6 +617,90 @@ object FirestoreCloudMappers {
         "mistakesCount" to p.mistakesCount.coerceIn(0, 200),
         "teacherRemarks" to p.teacherRemarks.take(350),
         "nextTarget" to p.nextTarget.take(200),
+        "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
+        "updatedAt" to FieldValue.serverTimestamp()
+    )
+
+    fun buildNamazLogPayload(
+        n: NamazLogRecord,
+        classId: String,
+        adminUid: String,
+        existingCreatedAt: Timestamp? = null
+    ): Map<String, Any> = mapOf(
+        "logId" to sanitizeId(n.id),
+        "academyId" to ACADEMY_ID,
+        "adminUid" to adminUid,
+        "date" to n.date.take(20).ifBlank { "2026-01-01" },
+        "classId" to sanitizeId(classId),
+        "studentId" to sanitizeId(n.studentId),
+        "studentName" to n.studentName.take(120).ifBlank { "Student" },
+        "admissionNumber" to n.admissionNumber.take(40).ifBlank { "HQA-0001" },
+        "teacherId" to n.teacherId.take(128).ifBlank { "Teacher" },
+        "teacherName" to n.teacherName.take(120).ifBlank { "Academy Ustad" },
+        "prayerName" to n.prayerName.take(80).ifBlank { "5 Prayers Check" },
+        "duaOrSurahTopic" to n.duaOrSurahTopic.take(150),
+        "rating" to n.rating.name,
+        "wuduAndPostureNotes" to n.wuduAndPostureNotes.take(200),
+        "teacherRemarks" to n.teacherRemarks.take(350),
+        "nextTarget" to n.nextTarget.take(200),
+        "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
+        "updatedAt" to FieldValue.serverTimestamp()
+    )
+
+    fun buildMadniQaidaLogPayload(
+        q: MadniQaidaLogRecord,
+        classId: String,
+        adminUid: String,
+        existingCreatedAt: Timestamp? = null
+    ): Map<String, Any> = mapOf(
+        "logId" to sanitizeId(q.id),
+        "academyId" to ACADEMY_ID,
+        "adminUid" to adminUid,
+        "date" to q.date.take(20).ifBlank { "2026-01-01" },
+        "classId" to sanitizeId(classId),
+        "studentId" to sanitizeId(q.studentId),
+        "studentName" to q.studentName.take(120).ifBlank { "Student" },
+        "admissionNumber" to q.admissionNumber.take(40).ifBlank { "HQA-0001" },
+        "teacherId" to q.teacherId.take(128).ifBlank { "Teacher" },
+        "teacherName" to q.teacherName.take(120).ifBlank { "Academy Ustad" },
+        "lessonNumber" to q.lessonNumber.coerceIn(1, 30),
+        "lessonTitle" to q.lessonTitle.take(120).ifBlank { "Lesson 1: Huroof-e-Mufridat" },
+        "pageNumber" to q.pageNumber.coerceIn(1, 150),
+        "linesCovered" to q.linesCovered.take(80),
+        "rating" to q.rating.name,
+        "revisionSummary" to q.revisionSummary.take(200),
+        "mistakesCount" to q.mistakesCount.coerceIn(0, 200),
+        "teacherRemarks" to q.teacherRemarks.take(350),
+        "nextTarget" to q.nextTarget.take(200),
+        "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
+        "updatedAt" to FieldValue.serverTimestamp()
+    )
+
+    fun buildLeaveRequestPayload(
+        l: LeaveRequest,
+        adminUid: String,
+        existingCreatedAt: Timestamp? = null
+    ): Map<String, Any> = mapOf(
+        "leaveId" to sanitizeId(l.id),
+        "academyId" to ACADEMY_ID,
+        "adminUid" to adminUid,
+        "studentId" to sanitizeId(l.studentId),
+        "studentName" to l.studentName.take(120).ifBlank { "Student" },
+        "admissionNumber" to l.admissionNumber.take(40).ifBlank { "HQA-0001" },
+        "classId" to sanitizeId(l.classId.ifBlank { "unassigned_class" }),
+        "className" to l.className.take(120).ifBlank { "Halaqah" },
+        "teacherId" to l.teacherId.take(128),
+        "parentUid" to l.parentUid.take(128),
+        "parentName" to l.parentName.take(120),
+        "leaveType" to l.leaveType.take(60).ifBlank { "Sick / Medical" },
+        "fromDate" to l.fromDate.take(20).ifBlank { "2026-01-01" },
+        "toDate" to l.toDate.take(20).ifBlank { l.fromDate.take(20).ifBlank { "2026-01-01" } },
+        "reason" to l.reason.trim().take(500).let { if (it.length < 2) "Leave requested" else it },
+        "status" to l.status.name,
+        "reviewerName" to l.reviewerName.take(120),
+        "reviewerRole" to l.reviewerRole.take(30),
+        "reviewedDate" to l.reviewedDate.take(25),
+        "reviewerRemarks" to l.reviewerRemarks.take(350),
         "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
         "updatedAt" to FieldValue.serverTimestamp()
     )
@@ -581,6 +804,72 @@ object FirestoreCloudMappers {
             "date" to a.date.take(25).ifBlank { "2026-01-01" },
             "priority" to validPriority,
             "authorName" to a.authorName.take(120).ifBlank { "Hafiz Quran Academy" },
+            "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+    }
+
+    fun buildExamPayload(
+        exam: AcademyExam,
+        adminUid: String,
+        existingCreatedAt: Timestamp? = null
+    ): Map<String, Any> {
+        val total = exam.totalMarks.coerceIn(1.0, 1000.0)
+        val passing = exam.passingMarks.coerceIn(0.0, total)
+        return mapOf(
+            "examId" to sanitizeId(exam.id),
+            "academyId" to ACADEMY_ID,
+            "adminUid" to adminUid,
+            "title" to exam.title.trim().take(150).ifBlank { "Academy Assessment" },
+            "examType" to exam.examType.name,
+            "subjectName" to exam.subjectName.trim().take(120).ifBlank { "Hifz / Nazra & Tajweed" },
+            "classId" to sanitizeId(exam.classId),
+            "className" to exam.className.take(120).ifBlank { "Halaqah" },
+            "academicTerm" to exam.academicTerm.trim().take(40).ifBlank { "2026-2027" },
+            "examDate" to exam.examDate.trim().take(25).ifBlank { "2026-10-01" },
+            "totalMarks" to total,
+            "passingMarks" to passing,
+            "instructions" to exam.instructions.trim().take(400),
+            "createdByAdminName" to exam.createdByAdminName.take(120).ifBlank { "Administration" },
+            "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+    }
+
+    fun buildExamMarkPayload(
+        m: ExamMarkRecord,
+        adminUid: String,
+        existingCreatedAt: Timestamp? = null
+    ): Map<String, Any> {
+        val total = m.totalMarks.coerceIn(1.0, 1000.0)
+        val passing = m.passingMarks.coerceIn(0.0, total)
+        val obtained = if (m.isAbsent) 0.0 else m.obtainedMarks.coerceIn(0.0, total)
+        val computedGrade = m.grade.ifBlank {
+            ExamGradeHelper.computeGrade(obtained, total, passing, m.isAbsent)
+        }
+        return mapOf(
+            "markId" to sanitizeId(m.id),
+            "academyId" to ACADEMY_ID,
+            "adminUid" to adminUid,
+            "examId" to sanitizeId(m.examId),
+            "examTitle" to m.examTitle.take(150).ifBlank { "Academy Assessment" },
+            "examType" to m.examType.name,
+            "subjectName" to m.subjectName.take(120),
+            "examDate" to m.examDate.take(25).ifBlank { "2026-10-01" },
+            "academicTerm" to m.academicTerm.take(40).ifBlank { "2026-2027" },
+            "classId" to sanitizeId(m.classId),
+            "className" to m.className.take(120).ifBlank { "Halaqah" },
+            "studentId" to sanitizeId(m.studentId),
+            "studentName" to m.studentName.take(120).ifBlank { "Student" },
+            "admissionNumber" to m.admissionNumber.take(40).ifBlank { "HQA-0001" },
+            "obtainedMarks" to obtained,
+            "totalMarks" to total,
+            "passingMarks" to passing,
+            "grade" to computedGrade.take(40),
+            "isAbsent" to m.isAbsent,
+            "remarks" to m.remarks.trim().take(300),
+            "gradedByTeacherId" to m.gradedByTeacherId.take(128).ifBlank { "Teacher" },
+            "gradedByTeacherName" to m.gradedByTeacherName.take(120).ifBlank { "Academy Ustad" },
             "createdAt" to (existingCreatedAt ?: FieldValue.serverTimestamp()),
             "updatedAt" to FieldValue.serverTimestamp()
         )

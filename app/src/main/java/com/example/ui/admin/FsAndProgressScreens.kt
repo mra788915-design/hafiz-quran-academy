@@ -605,18 +605,43 @@ fun QuranProgressReportsScreen(
     modifier: Modifier = Modifier
 ) {
     val progressList by viewModel.quranProgressList.collectAsState(initial = emptyList())
+    val namazLogs by viewModel.namazLogsList.collectAsState(initial = emptyList())
+    val qaidaLogs by viewModel.madniQaidaLogsList.collectAsState(initial = emptyList())
     val students by viewModel.activeStudents.collectAsState(initial = emptyList())
-    var showAddDialog by remember { mutableStateOf(false) }
+
+    var selectedLogTab by remember { mutableStateOf(0) } // 0 = Quran, 1 = Namaz, 2 = Madni Qaida
+
+    var showAddQuranDialog by remember { mutableStateOf(false) }
     var editingProgress by remember { mutableStateOf<QuranProgressRecord?>(null) }
     var deletingProgress by remember { mutableStateOf<QuranProgressRecord?>(null) }
+
+    var showAddNamazDialog by remember { mutableStateOf(false) }
+    var editingNamaz by remember { mutableStateOf<NamazLogRecord?>(null) }
+    var deletingNamaz by remember { mutableStateOf<NamazLogRecord?>(null) }
+
+    var showAddQaidaDialog by remember { mutableStateOf(false) }
+    var editingQaida by remember { mutableStateOf<MadniQaidaLogRecord?>(null) }
+    var deletingQaida by remember { mutableStateOf<MadniQaidaLogRecord?>(null) }
+
+    val fabLabel = when (selectedLogTab) {
+        0 -> "Log Quran"
+        1 -> "Log Namaz"
+        else -> "Log Qaida"
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showAddDialog = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Log Lesson") },
+                onClick = {
+                    when (selectedLogTab) {
+                        0 -> showAddQuranDialog = true
+                        1 -> showAddNamazDialog = true
+                        else -> showAddQaidaDialog = true
+                    }
+                },
+                icon = { Icon(Icons.Default.Add, contentDescription = fabLabel) },
+                text = { Text(fabLabel) },
                 modifier = Modifier.testTag("log_quran_fab")
             )
         }
@@ -625,55 +650,154 @@ fun QuranProgressReportsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "Quran Memorization & Revision Tracking",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = "Daily Sabaq, Sabqi & Manzil — Edit or Remove any lesson log",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (progressList.isEmpty()) {
-                EmptyPlaceholderCard(
-                    title = "No Quran progress records yet",
-                    subtitle = "Tap 'Log Lesson' to record today's Sabaq, Sabqi, and Daur recitation.",
-                    icon = Icons.Default.AutoStories
+            TabRow(selectedTabIndex = selectedLogTab) {
+                Tab(
+                    selected = selectedLogTab == 0,
+                    onClick = { selectedLogTab = 0 },
+                    text = { Text("Quran (${progressList.size})", fontSize = 12.sp) },
+                    modifier = Modifier.testTag("admin_tab_quran_log")
                 )
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 84.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(progressList, key = { it.id }) { rec ->
-                        QuranProgressCardItem(
-                            record = rec,
-                            onEdit = { editingProgress = rec },
-                            onDelete = { deletingProgress = rec }
+                Tab(
+                    selected = selectedLogTab == 1,
+                    onClick = { selectedLogTab = 1 },
+                    text = { Text("Namaz (${namazLogs.size})", fontSize = 12.sp) },
+                    modifier = Modifier.testTag("admin_tab_namaz_log")
+                )
+                Tab(
+                    selected = selectedLogTab == 2,
+                    onClick = { selectedLogTab = 2 },
+                    text = { Text("Madni Qaida (${qaidaLogs.size})", fontSize = 12.sp) },
+                    modifier = Modifier.testTag("admin_tab_qaida_log")
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                when (selectedLogTab) {
+                    0 -> {
+                        Text(
+                            text = "Quran Memorization & Revision Tracking",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
+                        Text(
+                            text = "Daily Sabaq, Sabqi & Manzil — Edit or Remove any lesson log",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (progressList.isEmpty()) {
+                            EmptyPlaceholderCard(
+                                title = "No Quran progress records yet",
+                                subtitle = "Tap 'Log Quran' to record today's Sabaq, Sabqi, and Daur recitation.",
+                                icon = Icons.Default.AutoStories
+                            )
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 84.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(progressList, key = { it.id }) { rec ->
+                                    QuranProgressCardItem(
+                                        record = rec,
+                                        onEdit = { editingProgress = rec },
+                                        onDelete = { deletingProgress = rec }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    1 -> {
+                        Text(
+                            text = "Daily Namaz & Masnoon Dua Log",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Track Salah punctuality, Wudu, Arkan & Duas for each student",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (namazLogs.isEmpty()) {
+                            EmptyPlaceholderCard(
+                                title = "No Namaz logs recorded yet",
+                                subtitle = "Tap 'Log Namaz' to record daily Salah check, Wudu & Masnoon Duas.",
+                                icon = Icons.Default.Mosque
+                            )
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 84.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(namazLogs, key = { it.id }) { rec ->
+                                    NamazLogCardItem(
+                                        record = rec,
+                                        onEdit = { editingNamaz = rec },
+                                        onDelete = { deletingNamaz = rec }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    else -> {
+                        Text(
+                            text = "Madni Qaida Foundation Progress Log",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Track Lessons 1–26, Page #, Makharij & Dohrai for beginner students",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (qaidaLogs.isEmpty()) {
+                            EmptyPlaceholderCard(
+                                title = "No Madni Qaida logs yet",
+                                subtitle = "Tap 'Log Qaida' to record today's Madni Qaida lesson, page and Makharij.",
+                                icon = Icons.Default.MenuBook
+                            )
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 84.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(qaidaLogs, key = { it.id }) { rec ->
+                                    MadniQaidaLogCardItem(
+                                        record = rec,
+                                        onEdit = { editingQaida = rec },
+                                        onDelete = { deletingQaida = rec }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    if (showAddDialog) {
+    if (showAddQuranDialog) {
         RecordQuranLessonDialog(
             students = students,
-            onDismiss = { showAddDialog = false },
+            onDismiss = { showAddQuranDialog = false },
             onSubmit = { studentId, date, surah, sNum, juz, start, end, rating, sabqi, manzil, mistakes, remarks, target ->
                 viewModel.recordQuranProgress(
                     studentId, date, surah, sNum, juz, start, end, rating, sabqi, manzil, mistakes, remarks, target
                 ) {
-                    showAddDialog = false
+                    showAddQuranDialog = false
                 }
             }
         )
@@ -712,10 +836,109 @@ fun QuranProgressReportsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingProgress = null }) {
-                    Text("Cancel")
+                TextButton(onClick = { deletingProgress = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showAddNamazDialog) {
+        RecordNamazLogDialog(
+            students = students,
+            onDismiss = { showAddNamazDialog = false },
+            onSubmit = { studentId, date, prayer, dua, rating, wudu, remarks, target ->
+                viewModel.recordNamazLog(studentId, date, prayer, dua, rating, wudu, remarks, target) {
+                    showAddNamazDialog = false
                 }
             }
         )
     }
+
+    editingNamaz?.let { rec ->
+        EditNamazLogDialog(
+            record = rec,
+            onDismiss = { editingNamaz = null },
+            onSave = { updated ->
+                viewModel.updateNamazLog(updated) {
+                    editingNamaz = null
+                }
+            }
+        )
+    }
+
+    deletingNamaz?.let { rec ->
+        AlertDialog(
+            onDismissRequest = { deletingNamaz = null },
+            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color(0xFFDC2626)) },
+            title = { Text("Remove Namaz Log?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Remove ${rec.studentName}'s ${rec.prayerName} log from ${rec.date}?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteNamazLog(rec.id)
+                        deletingNamaz = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("confirm_delete_namaz_btn")
+                ) {
+                    Text("Remove Log")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingNamaz = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showAddQaidaDialog) {
+        RecordMadniQaidaLogDialog(
+            students = students,
+            onDismiss = { showAddQaidaDialog = false },
+            onSubmit = { studentId, date, lNum, lTitle, page, lines, rating, rev, mistakes, remarks, target ->
+                viewModel.recordMadniQaidaLog(studentId, date, lNum, lTitle, page, lines, rating, rev, mistakes, remarks, target) {
+                    showAddQaidaDialog = false
+                }
+            }
+        )
+    }
+
+    editingQaida?.let { rec ->
+        EditMadniQaidaLogDialog(
+            record = rec,
+            onDismiss = { editingQaida = null },
+            onSave = { updated ->
+                viewModel.updateMadniQaidaLog(updated) {
+                    editingQaida = null
+                }
+            }
+        )
+    }
+
+    deletingQaida?.let { rec ->
+        AlertDialog(
+            onDismissRequest = { deletingQaida = null },
+            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color(0xFFDC2626)) },
+            title = { Text("Remove Madni Qaida Log?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Remove ${rec.studentName}'s ${rec.lessonTitle} log from ${rec.date}?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteMadniQaidaLog(rec.id)
+                        deletingQaida = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.testTag("confirm_delete_qaida_btn")
+                ) {
+                    Text("Remove Log")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingQaida = null }) { Text("Cancel") }
+            }
+        )
+    }
 }
+

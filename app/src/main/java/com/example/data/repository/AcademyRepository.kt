@@ -22,11 +22,16 @@ class AcademyRepository(
     private val classDao = database.classDao()
     private val attendanceDao = database.attendanceDao()
     private val quranProgressDao = database.quranProgressDao()
+    private val namazLogDao = database.namazLogDao()
+    private val madniQaidaLogDao = database.madniQaidaLogDao()
+    private val leaveRequestDao = database.leaveRequestDao()
     private val feeChallanDao = database.feeChallanDao()
     private val feePaymentDao = database.feePaymentDao()
     private val feeSabilillahDao = database.feeSabilillahDao()
     private val announcementDao = database.announcementDao()
     private val scheduleDao = database.scheduleDao()
+    private val examDao = database.examDao()
+    private val examMarkDao = database.examMarkDao()
     private val userDao = database.userDao()
 
     var settings: AcademySettings = AcademySettings()
@@ -42,6 +47,11 @@ class AcademyRepository(
     val allFsRecords: Flow<List<FeeSabilillahRecord>> = feeSabilillahDao.getAllFsRecordsFlow()
     val allAnnouncements: Flow<List<Announcement>> = announcementDao.getAllAnnouncementsFlow()
     val allProgress: Flow<List<QuranProgressRecord>> = quranProgressDao.getAllProgressFlow()
+    val allNamazLogs: Flow<List<NamazLogRecord>> = namazLogDao.getAllNamazLogsFlow()
+    val allMadniQaidaLogs: Flow<List<MadniQaidaLogRecord>> = madniQaidaLogDao.getAllQaidaLogsFlow()
+    val allLeaveRequests: Flow<List<LeaveRequest>> = leaveRequestDao.getAllLeaveRequestsFlow()
+    val allExams: Flow<List<AcademyExam>> = examDao.getAllExamsFlow()
+    val allExamMarks: Flow<List<ExamMarkRecord>> = examMarkDao.getAllMarksFlow()
     val allAttendance: Flow<List<AttendanceRecord>> = attendanceDao.getAllAttendanceFlow()
     val allUsers: Flow<List<UserAccount>> = userDao.getAllUsersFlow()
 
@@ -53,6 +63,18 @@ class AcademyRepository(
         attendanceDao.getAttendanceByStudentFlow(studentId)
     fun getProgressByStudent(studentId: String): Flow<List<QuranProgressRecord>> =
         quranProgressDao.getProgressByStudentFlow(studentId)
+    fun getNamazLogsByStudent(studentId: String): Flow<List<NamazLogRecord>> =
+        namazLogDao.getNamazLogsByStudentFlow(studentId)
+    fun getQaidaLogsByStudent(studentId: String): Flow<List<MadniQaidaLogRecord>> =
+        madniQaidaLogDao.getQaidaLogsByStudentFlow(studentId)
+    fun getLeavesByStudent(studentId: String): Flow<List<LeaveRequest>> =
+        leaveRequestDao.getLeavesByStudentFlow(studentId)
+    fun getExamsByClass(classId: String): Flow<List<AcademyExam>> =
+        examDao.getExamsByClassFlow(classId)
+    fun getMarksByExam(examId: String): Flow<List<ExamMarkRecord>> =
+        examMarkDao.getMarksByExamFlow(examId)
+    fun getMarksByStudent(studentId: String): Flow<List<ExamMarkRecord>> =
+        examMarkDao.getMarksByStudentFlow(studentId)
     fun getChallansByStudent(studentId: String): Flow<List<FeeChallan>> =
         feeChallanDao.getChallansByStudentFlow(studentId)
     fun getPaymentsByChallan(challanId: String): Flow<List<FeePayment>> =
@@ -712,6 +734,10 @@ class AcademyRepository(
 
             attendanceDao.deleteAttendanceByStudentId(studentId)
             quranProgressDao.deleteProgressByStudentId(studentId)
+            namazLogDao.deleteNamazLogsByStudentId(studentId)
+            madniQaidaLogDao.deleteQaidaLogsByStudentId(studentId)
+            leaveRequestDao.deleteLeavesByStudentId(studentId)
+            examMarkDao.deleteMarksByStudentId(studentId)
             feePaymentsAndChallansCleanup(studentId)
             feeSabilillahDao.deleteFsByStudentId(studentId)
             studentDao.deleteStudentById(studentId)
@@ -1270,6 +1296,498 @@ class AcademyRepository(
             }
             quranProgressDao.deleteProgressById(rec.id)
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- Daily Namaz & Masnoon Dua Logs ---
+    suspend fun recordNamazLog(
+        studentId: String,
+        teacherId: String,
+        teacherName: String,
+        date: String,
+        prayerName: String,
+        duaOrSurahTopic: String,
+        rating: NamazProgressRating,
+        wuduAndPostureNotes: String,
+        teacherRemarks: String,
+        nextTarget: String
+    ): Result<NamazLogRecord> = withContext(Dispatchers.IO) {
+        try {
+            val student = studentDao.getStudentById(studentId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Student not found"))
+            val record = NamazLogRecord(
+                id = FirestoreCloudMappers.sanitizeId("namaz_${UUID.randomUUID().toString().take(12)}"),
+                date = date.ifBlank { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) },
+                studentId = studentId,
+                studentName = student.fullName,
+                admissionNumber = student.admissionNumber,
+                teacherId = teacherId.ifBlank { student.teacherId.ifBlank { "Teacher" } },
+                teacherName = teacherName.ifBlank { student.teacherName.ifBlank { "Academy Ustad" } },
+                prayerName = prayerName.trim().ifBlank { "5 Prayers Check" },
+                duaOrSurahTopic = duaOrSurahTopic.trim(),
+                rating = rating,
+                wuduAndPostureNotes = wuduAndPostureNotes.trim(),
+                teacherRemarks = teacherRemarks.trim(),
+                nextTarget = nextTarget.trim()
+            )
+            val uid = currentCloudUid()
+            if (cloudRepo != null && uid != null) {
+                cloudRepo.upsertNamazLogCloud(record, student.classId, uid)
+            }
+            namazLogDao.insertNamazLog(record)
+            Result.success(record)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateNamazLog(record: NamazLogRecord): Result<NamazLogRecord> = withContext(Dispatchers.IO) {
+        try {
+            if (record.prayerName.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("Prayer / Namaz category is required"))
+            }
+            val student = studentDao.getStudentById(record.studentId)
+            val classId = student?.classId?.ifBlank { "unassigned_class" } ?: "unassigned_class"
+            val updated = record.copy(
+                prayerName = record.prayerName.trim(),
+                duaOrSurahTopic = record.duaOrSurahTopic.trim(),
+                wuduAndPostureNotes = record.wuduAndPostureNotes.trim(),
+                teacherRemarks = record.teacherRemarks.trim(),
+                nextTarget = record.nextTarget.trim(),
+                timestamp = System.currentTimeMillis()
+            )
+            val uid = currentCloudUid()
+            if (cloudRepo != null && uid != null) {
+                cloudRepo.upsertNamazLogCloud(updated, classId, uid)
+            }
+            namazLogDao.updateNamazLog(updated)
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteNamazLog(logId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val rec = namazLogDao.getNamazLogById(logId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Namaz log not found"))
+            if (cloudRepo != null && currentCloudUid() != null) {
+                cloudRepo.deleteNamazLogCloud(rec.id, rec.studentId)
+            }
+            namazLogDao.deleteNamazLogById(rec.id)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- Daily Madni Qaida Logs ---
+    suspend fun recordMadniQaidaLog(
+        studentId: String,
+        teacherId: String,
+        teacherName: String,
+        date: String,
+        lessonNumber: Int,
+        lessonTitle: String,
+        pageNumber: Int,
+        linesCovered: String,
+        rating: QuranProgressRating,
+        revisionSummary: String,
+        mistakesCount: Int,
+        teacherRemarks: String,
+        nextTarget: String
+    ): Result<MadniQaidaLogRecord> = withContext(Dispatchers.IO) {
+        try {
+            val student = studentDao.getStudentById(studentId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Student not found"))
+            val record = MadniQaidaLogRecord(
+                id = FirestoreCloudMappers.sanitizeId("qaida_${UUID.randomUUID().toString().take(12)}"),
+                date = date.ifBlank { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) },
+                studentId = studentId,
+                studentName = student.fullName,
+                admissionNumber = student.admissionNumber,
+                teacherId = teacherId.ifBlank { student.teacherId.ifBlank { "Teacher" } },
+                teacherName = teacherName.ifBlank { student.teacherName.ifBlank { "Academy Ustad" } },
+                lessonNumber = lessonNumber.coerceIn(1, 30),
+                lessonTitle = lessonTitle.trim().ifBlank { "Lesson $lessonNumber" },
+                pageNumber = pageNumber.coerceIn(1, 150),
+                linesCovered = linesCovered.trim(),
+                rating = rating,
+                revisionSummary = revisionSummary.trim(),
+                mistakesCount = mistakesCount.coerceIn(0, 200),
+                teacherRemarks = teacherRemarks.trim(),
+                nextTarget = nextTarget.trim()
+            )
+            val uid = currentCloudUid()
+            if (cloudRepo != null && uid != null) {
+                cloudRepo.upsertMadniQaidaLogCloud(record, student.classId, uid)
+            }
+            madniQaidaLogDao.insertQaidaLog(record)
+            Result.success(record)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateMadniQaidaLog(record: MadniQaidaLogRecord): Result<MadniQaidaLogRecord> = withContext(Dispatchers.IO) {
+        try {
+            if (record.lessonTitle.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("Lesson title is required"))
+            }
+            val student = studentDao.getStudentById(record.studentId)
+            val classId = student?.classId?.ifBlank { "unassigned_class" } ?: "unassigned_class"
+            val updated = record.copy(
+                lessonNumber = record.lessonNumber.coerceIn(1, 30),
+                lessonTitle = record.lessonTitle.trim(),
+                pageNumber = record.pageNumber.coerceIn(1, 150),
+                linesCovered = record.linesCovered.trim(),
+                revisionSummary = record.revisionSummary.trim(),
+                mistakesCount = record.mistakesCount.coerceIn(0, 200),
+                teacherRemarks = record.teacherRemarks.trim(),
+                nextTarget = record.nextTarget.trim(),
+                timestamp = System.currentTimeMillis()
+            )
+            val uid = currentCloudUid()
+            if (cloudRepo != null && uid != null) {
+                cloudRepo.upsertMadniQaidaLogCloud(updated, classId, uid)
+            }
+            madniQaidaLogDao.updateQaidaLog(updated)
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteMadniQaidaLog(logId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val rec = madniQaidaLogDao.getQaidaLogById(logId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Madni Qaida log not found"))
+            if (cloudRepo != null && currentCloudUid() != null) {
+                cloudRepo.deleteMadniQaidaLogCloud(rec.id, rec.studentId)
+            }
+            madniQaidaLogDao.deleteQaidaLogById(rec.id)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- Student Leave Requests (Parent Submit -> Admin/Teacher Review -> Automatic Attendance LEAVE) ---
+    suspend fun submitLeaveRequest(
+        studentId: String,
+        parentUid: String,
+        parentName: String,
+        leaveType: String,
+        fromDate: String,
+        toDate: String,
+        reason: String
+    ): Result<LeaveRequest> = withContext(Dispatchers.IO) {
+        try {
+            val cleanReason = reason.trim()
+            if (cleanReason.length < 2) {
+                return@withContext Result.failure(IllegalArgumentException("Please enter a brief reason for leave."))
+            }
+            val student = studentDao.getStudentById(studentId)
+                ?: cloudRepo?.getStudentById(studentId)?.getOrNull()
+                ?: return@withContext Result.failure(IllegalArgumentException("Student not found"))
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val cleanFrom = fromDate.trim().ifBlank { today }
+            val cleanTo = toDate.trim().ifBlank { cleanFrom }
+            val matchedClass = if (student.classId.isNotBlank() && student.classId != "unassigned_class") {
+                classDao.getClassById(student.classId)
+            } else null
+
+            val leaveRequest = LeaveRequest(
+                id = FirestoreCloudMappers.sanitizeId("leave_${UUID.randomUUID().toString().take(12)}"),
+                studentId = student.id,
+                studentName = student.fullName,
+                admissionNumber = student.admissionNumber,
+                classId = student.classId.ifBlank { "unassigned_class" },
+                className = matchedClass?.name ?: student.className.ifBlank { "Unassigned" },
+                teacherId = student.teacherId.ifBlank { matchedClass?.assignedTeacherId ?: "" },
+                parentUid = parentUid,
+                parentName = parentName.ifBlank { student.guardianName },
+                leaveType = leaveType.trim().ifBlank { "Sick / Medical" },
+                fromDate = cleanFrom,
+                toDate = if (cleanTo < cleanFrom) cleanFrom else cleanTo,
+                reason = cleanReason,
+                status = ApprovalStatus.PENDING
+            )
+
+            val uid = currentCloudUid()
+            val saved = if (cloudRepo != null && uid != null) {
+                cloudRepo.submitLeaveRequestCloud(leaveRequest, uid)
+            } else {
+                leaveRequest
+            }
+            leaveRequestDao.insertLeaveRequest(saved)
+            Result.success(saved)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reviewLeaveRequest(
+        leaveId: String,
+        approved: Boolean,
+        reviewerName: String,
+        reviewerRole: String,
+        reviewerRemarks: String
+    ): Result<LeaveRequest> = withContext(Dispatchers.IO) {
+        try {
+            val existing = leaveRequestDao.getLeaveById(leaveId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Leave request not found"))
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val newStatus = if (approved) ApprovalStatus.APPROVED else ApprovalStatus.REJECTED
+
+            if (cloudRepo != null && currentCloudUid() != null) {
+                cloudRepo.reviewLeaveRequestCloud(
+                    leaveId = existing.id,
+                    approved = approved,
+                    reviewerName = reviewerName,
+                    reviewerRole = reviewerRole,
+                    reviewedDate = today,
+                    reviewerRemarks = reviewerRemarks
+                )
+            }
+
+            val updated = existing.copy(
+                status = newStatus,
+                reviewerName = reviewerName,
+                reviewerRole = reviewerRole,
+                reviewedDate = today,
+                reviewerRemarks = reviewerRemarks.trim(),
+                updatedAt = System.currentTimeMillis()
+            )
+            leaveRequestDao.insertLeaveRequest(updated)
+
+            // When Approved, automatically mark AttendanceStatus.LEAVE across requested dates
+            if (approved) {
+                val leaveDates = enumerateDatesInclusive(updated.fromDate, updated.toDate, maxDays = 31)
+                val student = studentDao.getStudentById(updated.studentId)
+                val effectiveClassId = updated.classId.ifBlank { student?.classId ?: "unassigned_class" }
+                val effectiveClassName = updated.className.ifBlank { student?.className ?: "Halaqah" }
+                val attendanceRecords = leaveDates.map { dateStr ->
+                    val attId = FirestoreCloudMappers.sanitizeId("att_${FirestoreCloudMappers.sanitizeId(updated.studentId)}_${dateStr}")
+                    AttendanceRecord(
+                        id = attId,
+                        date = dateStr,
+                        classId = effectiveClassId,
+                        className = effectiveClassName,
+                        studentId = updated.studentId,
+                        studentName = updated.studentName,
+                        admissionNumber = updated.admissionNumber,
+                        status = AttendanceStatus.LEAVE,
+                        remarks = "Approved Leave (${updated.leaveType}): ${updated.reason}".take(250),
+                        markedByTeacherId = reviewerName.ifBlank { reviewerRole },
+                        timestamp = System.currentTimeMillis()
+                    )
+                }
+                val uid = currentCloudUid()
+                if (cloudRepo != null && uid != null && attendanceRecords.isNotEmpty()) {
+                    runCatching { cloudRepo.saveAttendanceCloud(attendanceRecords, uid) }
+                }
+                attendanceDao.insertAttendanceRecords(attendanceRecords)
+            }
+
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteLeaveRequest(leaveId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val rec = leaveRequestDao.getLeaveById(leaveId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Leave request not found"))
+            if (cloudRepo != null && currentCloudUid() != null) {
+                cloudRepo.deleteLeaveRequestCloud(rec.id, rec.studentId)
+            }
+            leaveRequestDao.deleteLeaveById(rec.id)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun enumerateDatesInclusive(fromDate: String, toDate: String, maxDays: Int = 31): List<String> {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+        val start = runCatching { sdf.parse(fromDate.trim()) }.getOrNull() ?: return listOf(fromDate.trim())
+        val end = runCatching { sdf.parse(toDate.trim()) }.getOrNull() ?: start
+        if (end.before(start)) return listOf(sdf.format(start))
+
+        val cal = Calendar.getInstance(Locale.US).apply { time = start }
+        val endCal = Calendar.getInstance(Locale.US).apply { time = end }
+        val result = mutableListOf<String>()
+        while (!cal.after(endCal) && result.size < maxDays) {
+            result.add(sdf.format(cal.time))
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return result.ifEmpty { listOf(fromDate.trim()) }
+    }
+
+    // --- Exams Management & Role-Restricted Marks Upload ---
+    suspend fun createOrUpdateExam(
+        existingId: String? = null,
+        title: String,
+        examType: ExamType,
+        subjectName: String,
+        classId: String,
+        academicTerm: String,
+        examDate: String,
+        totalMarks: Double,
+        passingMarks: Double,
+        instructions: String,
+        createdByAdminName: String
+    ): Result<AcademyExam> = withContext(Dispatchers.IO) {
+        try {
+            val cleanTitle = title.trim()
+            if (cleanTitle.length < 2) {
+                return@withContext Result.failure(IllegalArgumentException("Please enter a valid exam title."))
+            }
+            val cleanClassId = FirestoreCloudMappers.sanitizeId(classId)
+            val matchedClass = classDao.getClassById(cleanClassId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Please select a valid class / Halaqah."))
+            val safeTotal = totalMarks.coerceIn(1.0, 1000.0)
+            val safePassing = passingMarks.coerceIn(0.0, safeTotal)
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val existing = existingId?.takeIf { it.isNotBlank() }?.let { examDao.getExamById(it) }
+            val examId = existing?.id ?: FirestoreCloudMappers.sanitizeId("exm_${UUID.randomUUID().toString().take(12)}")
+            val now = System.currentTimeMillis()
+            val exam = AcademyExam(
+                id = examId,
+                title = cleanTitle,
+                examType = examType,
+                subjectName = subjectName.trim().ifBlank { "Hifz / Nazra & Tajweed" },
+                classId = matchedClass.id,
+                className = matchedClass.name,
+                academicTerm = academicTerm.trim().ifBlank { "2026-2027" },
+                examDate = examDate.trim().ifBlank { today },
+                totalMarks = safeTotal,
+                passingMarks = safePassing,
+                instructions = instructions.trim(),
+                createdByAdminName = createdByAdminName.ifBlank { "Administration" },
+                createdAt = existing?.createdAt ?: now,
+                updatedAt = now
+            )
+            val adminUid = resolveAdminUidOrNull()
+            if (cloudRepo != null && adminUid != null) {
+                cloudRepo.upsertExamCloud(exam, adminUid)
+            }
+            examDao.insertExam(exam)
+            Result.success(exam)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteExam(examId: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val existing = examDao.getExamById(examId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Exam not found"))
+            val linkedMarks = examMarkDao.getMarksByExam(existing.id)
+            if (cloudRepo != null && currentCloudUid() != null) {
+                cloudRepo.deleteExamCloud(existing.id, linkedMarks)
+            }
+            examMarkDao.deleteMarksByExamId(existing.id)
+            examDao.deleteExamById(existing.id)
+            Result.success(existing.title)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveExamMark(
+        examId: String,
+        studentId: String,
+        obtainedMarks: Double,
+        isAbsent: Boolean,
+        remarks: String,
+        gradedByTeacherId: String,
+        gradedByTeacherName: String
+    ): Result<ExamMarkRecord> = withContext(Dispatchers.IO) {
+        try {
+            val exam = examDao.getExamById(examId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Exam not found."))
+            val student = studentDao.getStudentById(studentId)
+                ?: cloudRepo?.getStudentById(studentId)?.getOrNull()
+                ?: return@withContext Result.failure(IllegalArgumentException("Student not found."))
+
+            val safeObtained = if (isAbsent) 0.0 else obtainedMarks.coerceIn(0.0, exam.totalMarks)
+            val grade = ExamGradeHelper.computeGrade(safeObtained, exam.totalMarks, exam.passingMarks, isAbsent)
+            val deterministicId = FirestoreCloudMappers.sanitizeId("mark_${exam.id}_${student.id}")
+            val record = ExamMarkRecord(
+                id = deterministicId,
+                examId = exam.id,
+                examTitle = exam.title,
+                examType = exam.examType,
+                subjectName = exam.subjectName,
+                examDate = exam.examDate,
+                academicTerm = exam.academicTerm,
+                classId = exam.classId,
+                className = exam.className,
+                studentId = student.id,
+                studentName = student.fullName,
+                admissionNumber = student.admissionNumber,
+                obtainedMarks = safeObtained,
+                totalMarks = exam.totalMarks,
+                passingMarks = exam.passingMarks,
+                grade = grade,
+                isAbsent = isAbsent,
+                remarks = remarks.trim(),
+                gradedByTeacherId = gradedByTeacherId.ifBlank { student.teacherId.ifBlank { "Teacher" } },
+                gradedByTeacherName = gradedByTeacherName.ifBlank { student.teacherName.ifBlank { "Academy Ustad" } },
+                timestamp = System.currentTimeMillis()
+            )
+            val uid = currentCloudUid()
+            if (cloudRepo != null && uid != null) {
+                cloudRepo.upsertExamMarkCloud(record, uid)
+            }
+            examMarkDao.insertMark(record)
+            Result.success(record)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveBatchExamMarks(
+        examId: String,
+        studentMarks: List<Triple<String, Double, Boolean>>,
+        remarksMap: Map<String, String>,
+        gradedByTeacherId: String,
+        gradedByTeacherName: String
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            var count = 0
+            for ((studentId, obtained, isAbsent) in studentMarks) {
+                val res = saveExamMark(
+                    examId = examId,
+                    studentId = studentId,
+                    obtainedMarks = obtained,
+                    isAbsent = isAbsent,
+                    remarks = remarksMap[studentId] ?: "",
+                    gradedByTeacherId = gradedByTeacherId,
+                    gradedByTeacherName = gradedByTeacherName
+                )
+                if (res.isSuccess) count++
+            }
+            Result.success(count)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteExamMark(markId: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val existing = examMarkDao.getMarkById(markId)
+                ?: return@withContext Result.failure(IllegalArgumentException("Marks record not found"))
+            if (cloudRepo != null && currentCloudUid() != null) {
+                cloudRepo.deleteExamMarkCloud(existing.id, existing.studentId)
+            }
+            examMarkDao.deleteMarkById(existing.id)
+            Result.success("${existing.studentName} (${existing.examTitle})")
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -2206,5 +2724,82 @@ class AcademyRepository(
             teacherName = teacher1.fullName
         )
         scheduleDao.insertSchedules(listOf(sch1, sch2, sch3))
+
+        // 11. Sample Exams & Marks (Local/Test Fallback)
+        val ex1 = AcademyExam(
+            id = "exm_local_test_1",
+            title = "Monthly Tajweed & Sabaq Test",
+            examType = ExamType.TEST,
+            subjectName = "Hifz Sabaq & Tajweed Rules",
+            classId = hifzClass1.id,
+            className = hifzClass1.name,
+            academicTerm = "2026-2027",
+            examDate = today,
+            totalMarks = 50.0,
+            passingMarks = 20.0,
+            instructions = "Assess daily Sabaq fluency and Tajweed Makharij.",
+            createdByAdminName = "Nazim-e-Aala"
+        )
+        val ex2 = AcademyExam(
+            id = "exm_local_mid_1",
+            title = "Mid-Term Hifz Evaluation 2026",
+            examType = ExamType.MID_EXAM,
+            subjectName = "5 Juz Sabqi & Manzil Examination",
+            classId = hifzClass1.id,
+            className = hifzClass1.name,
+            academicTerm = "2026-2027",
+            examDate = today,
+            totalMarks = 100.0,
+            passingMarks = 40.0,
+            instructions = "Comprehensive mid-term oral examination.",
+            createdByAdminName = "Nazim-e-Aala"
+        )
+        examDao.insertExams(listOf(ex1, ex2))
+
+        val mk1 = ExamMarkRecord(
+            id = "mark_${ex1.id}_${s1.id}",
+            examId = ex1.id,
+            examTitle = ex1.title,
+            examType = ex1.examType,
+            subjectName = ex1.subjectName,
+            examDate = ex1.examDate,
+            academicTerm = ex1.academicTerm,
+            classId = hifzClass1.id,
+            className = hifzClass1.name,
+            studentId = s1.id,
+            studentName = s1.fullName,
+            admissionNumber = s1.admissionNumber,
+            obtainedMarks = 47.0,
+            totalMarks = ex1.totalMarks,
+            passingMarks = ex1.passingMarks,
+            grade = ExamGradeHelper.computeGrade(47.0, ex1.totalMarks, ex1.passingMarks, false),
+            isAbsent = false,
+            remarks = "MashaAllah excellent recitation.",
+            gradedByTeacherId = teacher1.id,
+            gradedByTeacherName = teacher1.fullName
+        )
+        val mk2 = ExamMarkRecord(
+            id = "mark_${ex2.id}_${s1.id}",
+            examId = ex2.id,
+            examTitle = ex2.title,
+            examType = ex2.examType,
+            subjectName = ex2.subjectName,
+            examDate = ex2.examDate,
+            academicTerm = ex2.academicTerm,
+            classId = hifzClass1.id,
+            className = hifzClass1.name,
+            studentId = s1.id,
+            studentName = s1.fullName,
+            admissionNumber = s1.admissionNumber,
+            obtainedMarks = 92.0,
+            totalMarks = ex2.totalMarks,
+            passingMarks = ex2.passingMarks,
+            grade = ExamGradeHelper.computeGrade(92.0, ex2.totalMarks, ex2.passingMarks, false),
+            isAbsent = false,
+            remarks = "Outstanding memorization stability.",
+            gradedByTeacherId = teacher1.id,
+            gradedByTeacherName = teacher1.fullName
+        )
+        examMarkDao.insertMarks(listOf(mk1, mk2))
     }
 }

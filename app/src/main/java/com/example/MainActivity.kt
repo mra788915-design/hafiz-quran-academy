@@ -277,6 +277,7 @@ fun AcademyApp(
                             7 -> ClassesScreen(viewModel = viewModel)
                             8 -> AnnouncementsScreen(viewModel = viewModel)
                             9 -> PortalCredentialsScreen(viewModel = viewModel)
+                            10 -> ExamsManagementScreen(viewModel = viewModel)
                             else -> AdminDashboardScreen(
                                 viewModel = viewModel,
                                 onNavigateTab = { tabIndex -> adminActiveTab = tabIndex }

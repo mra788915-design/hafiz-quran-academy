@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.models.*
 import com.example.ui.AcademyViewModel
 import com.example.ui.components.EmptyPlaceholderCard
+import com.example.ui.components.LeaveRequestCardItem
+import com.example.ui.components.ReviewLeaveDialog
 import com.example.ui.components.StatusBadge
 import kotlinx.coroutines.flow.flowOf
 import java.text.SimpleDateFormat
@@ -34,9 +36,19 @@ fun AttendanceManagementScreen(
     modifier: Modifier = Modifier
 ) {
     val classes by viewModel.classes.collectAsState(initial = emptyList())
+    val allLeaves by viewModel.leaveRequestsList.collectAsState(initial = emptyList())
+    var selectedSubTab by remember { mutableStateOf(0) } // 0 = Daily Attendance, 1 = Leave Requests
+    var leaveToReview by remember { mutableStateOf<Pair<LeaveRequest, Boolean>?>(null) }
+    var leaveToDelete by remember { mutableStateOf<LeaveRequest?>(null) }
+
     var selectedClass by remember { mutableStateOf<AcademyClass?>(null) }
     var selectedDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
     var showClearDateConfirm by remember { mutableStateOf(false) }
+
+    val sortedLeaves = remember(allLeaves) {
+        allLeaves.sortedWith(compareBy<LeaveRequest> { it.status != ApprovalStatus.PENDING }.thenByDescending { it.createdAt })
+    }
+    val pendingLeavesCount = remember(allLeaves) { allLeaves.count { it.status == ApprovalStatus.PENDING } }
 
     LaunchedEffect(classes) {
         if (selectedClass == null || classes.none { it.id == selectedClass?.id }) {
@@ -117,7 +129,7 @@ fun AttendanceManagementScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
-            if (studentsInClass.isNotEmpty()) {
+            if (selectedSubTab == 0 && studentsInClass.isNotEmpty()) {
                 Surface(
                     tonalElevation = 8.dp,
                     shadowElevation = 8.dp,
@@ -182,6 +194,75 @@ fun AttendanceManagementScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+        ) {
+            TabRow(selectedTabIndex = selectedSubTab) {
+                Tab(
+                    selected = selectedSubTab == 0,
+                    onClick = { selectedSubTab = 0 },
+                    text = { Text("Daily Attendance", fontSize = 13.sp) },
+                    modifier = Modifier.testTag("admin_tab_daily_attendance")
+                )
+                Tab(
+                    selected = selectedSubTab == 1,
+                    onClick = { selectedSubTab = 1 },
+                    text = {
+                        Text(
+                            if (pendingLeavesCount > 0) "Leave Requests ($pendingLeavesCount Pending)" else "Leave Requests (${allLeaves.size})",
+                            fontSize = 13.sp
+                        )
+                    },
+                    modifier = Modifier.testTag("admin_tab_leave_requests")
+                )
+            }
+
+            if (selectedSubTab == 1) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Student Leave Applications",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "Approving a leave request automatically marks LEAVE in the Attendance Register.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (sortedLeaves.isEmpty()) {
+                        EmptyPlaceholderCard(
+                            title = "No leave requests yet",
+                            subtitle = "Leave applications submitted from Parent Portals will appear here for Admin & Teacher approval.",
+                            icon = Icons.Default.EventBusy
+                        )
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 24.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(sortedLeaves, key = { it.id }) { leave ->
+                                LeaveRequestCardItem(
+                                    leave = leave,
+                                    showReviewerActions = true,
+                                    showCancelOrDeleteAction = true,
+                                    deleteLabel = "Delete",
+                                    onApprove = { leaveToReview = leave to true },
+                                    onReject = { leaveToReview = leave to false },
+                                    onDelete = { leaveToDelete = leave }
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -280,6 +361,44 @@ fun AttendanceManagementScreen(
                 }
             }
         }
+            }
+        }
+    }
+
+    leaveToReview?.let { (leave, approve) ->
+        ReviewLeaveDialog(
+            leave = leave,
+            initialApprove = approve,
+            onDismiss = { leaveToReview = null },
+            onConfirm = { approvedChoice, remarks ->
+                viewModel.reviewLeaveRequest(leave.id, approvedChoice, remarks) {
+                    leaveToReview = null
+                }
+            }
+        )
+    }
+
+    leaveToDelete?.let { leave ->
+        AlertDialog(
+            onDismissRequest = { leaveToDelete = null },
+            icon = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = Color(0xFFDC2626)) },
+            title = { Text("Delete Leave Request?", fontWeight = FontWeight.Bold) },
+            text = { Text("Remove leave request for ${leave.studentName} (${leave.fromDate} to ${leave.toDate})?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteLeaveRequest(leave.id)
+                        leaveToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { leaveToDelete = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 

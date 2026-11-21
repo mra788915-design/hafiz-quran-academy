@@ -8,12 +8,17 @@ import com.example.data.remote.FirestoreCloudMappers.ACADEMY_ID
 import com.example.data.remote.FirestoreCloudMappers.getStringList
 import com.example.data.remote.FirestoreCloudMappers.sanitizeId
 import com.example.data.remote.FirestoreCloudMappers.toAcademyClass
+import com.example.data.remote.FirestoreCloudMappers.toAcademyExam
 import com.example.data.remote.FirestoreCloudMappers.toAnnouncement
 import com.example.data.remote.FirestoreCloudMappers.toAttendanceRecord
 import com.example.data.remote.FirestoreCloudMappers.toCloudUserProfile
+import com.example.data.remote.FirestoreCloudMappers.toExamMarkRecord
 import com.example.data.remote.FirestoreCloudMappers.toFeeChallan
 import com.example.data.remote.FirestoreCloudMappers.toFeePayment
 import com.example.data.remote.FirestoreCloudMappers.toFsRecord
+import com.example.data.remote.FirestoreCloudMappers.toLeaveRequest
+import com.example.data.remote.FirestoreCloudMappers.toMadniQaidaLogRecord
+import com.example.data.remote.FirestoreCloudMappers.toNamazLogRecord
 import com.example.data.remote.FirestoreCloudMappers.toQuranProgressRecord
 import com.example.data.remote.FirestoreCloudMappers.toStudent
 import com.example.data.remote.FirestoreCloudMappers.toTeacher
@@ -521,6 +526,33 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
                 }
         }
         launch {
+            db.collection("namaz_logs").whereEqualTo("adminUid", adminUid).snapshots()
+                .catch { handleFirestoreError(it as? Exception ?: Exception(it), OperationType.LIST, "namaz_logs") }
+                .collectLatest { qs ->
+                    val items = qs.documents.mapNotNull { it.toNamazLogRecord() }
+                    cleanup.clearAllNamazLogs()
+                    if (items.isNotEmpty()) localDb.namazLogDao().insertNamazLogs(items)
+                }
+        }
+        launch {
+            db.collection("madni_qaida_logs").whereEqualTo("adminUid", adminUid).snapshots()
+                .catch { handleFirestoreError(it as? Exception ?: Exception(it), OperationType.LIST, "madni_qaida_logs") }
+                .collectLatest { qs ->
+                    val items = qs.documents.mapNotNull { it.toMadniQaidaLogRecord() }
+                    cleanup.clearAllQaidaLogs()
+                    if (items.isNotEmpty()) localDb.madniQaidaLogDao().insertQaidaLogs(items)
+                }
+        }
+        launch {
+            db.collection("leave_requests").whereEqualTo("adminUid", adminUid).snapshots()
+                .catch { handleFirestoreError(it as? Exception ?: Exception(it), OperationType.LIST, "leave_requests") }
+                .collectLatest { qs ->
+                    val items = qs.documents.mapNotNull { it.toLeaveRequest() }
+                    cleanup.clearAllLeaveRequests()
+                    if (items.isNotEmpty()) localDb.leaveRequestDao().insertLeaveRequests(items)
+                }
+        }
+        launch {
             db.collection("fee_challans").whereEqualTo("adminUid", adminUid).snapshots()
                 .catch { handleFirestoreError(it as? Exception ?: Exception(it), OperationType.LIST, "fee_challans") }
                 .collectLatest { qs ->
@@ -554,6 +586,24 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
                     val items = qs.documents.mapNotNull { it.toAnnouncement() }
                     cleanup.clearAllAnnouncements()
                     if (items.isNotEmpty()) localDb.announcementDao().insertAnnouncements(items)
+                }
+        }
+        launch {
+            db.collection("exams").whereEqualTo("adminUid", adminUid).snapshots()
+                .catch { handleFirestoreError(it as? Exception ?: Exception(it), OperationType.LIST, "exams") }
+                .collectLatest { qs ->
+                    val items = qs.documents.mapNotNull { it.toAcademyExam() }
+                    cleanup.clearAllExams()
+                    if (items.isNotEmpty()) localDb.examDao().insertExams(items)
+                }
+        }
+        launch {
+            db.collection("exam_marks").whereEqualTo("adminUid", adminUid).snapshots()
+                .catch { handleFirestoreError(it as? Exception ?: Exception(it), OperationType.LIST, "exam_marks") }
+                .collectLatest { qs ->
+                    val items = qs.documents.mapNotNull { it.toExamMarkRecord() }
+                    cleanup.clearAllExamMarks()
+                    if (items.isNotEmpty()) localDb.examMarkDao().insertMarks(items)
                 }
         }
         launch {
@@ -640,6 +690,18 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
                 localDb.studentDao().insertStudents(students)
             }
             syncStudentIndexedRecords(validStudentSnaps, includeBilling = false, localDb = localDb)
+
+            // Fetch Admin-created Exams for Teacher's assigned classes (Teacher sees only their classes' exams)
+            val dirExamIds = dirSnap?.takeIf { it.exists() }?.getStringList("examIds") ?: emptyList()
+            val teacherExams = dirExamIds.mapNotNull { exId ->
+                runCatching { db.collection("exams").document(sanitizeId(exId)).get().await().toAcademyExam() }.getOrNull()
+            }.filter { ex ->
+                ex.classId in matchedClassIdSet || ex.classId in profile.assignedClassIds
+            }
+            cleanup.clearAllExams()
+            if (teacherExams.isNotEmpty()) {
+                localDb.examDao().insertExams(teacherExams)
+            }
 
             // Attach live snapshot listeners to any newly discovered assigned classes
             for (cid in matchedClassIdSet) {
@@ -799,7 +861,23 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
             cleanup.clearAllPayments()
             cleanup.clearAllAttendance()
             cleanup.clearAllProgress()
+            cleanup.clearAllNamazLogs()
+            cleanup.clearAllQaidaLogs()
+            cleanup.clearAllLeaveRequests()
+            cleanup.clearAllExams()
+            cleanup.clearAllExamMarks()
             return@coroutineScope
+        }
+
+        launch {
+            db.collection("leave_requests").whereEqualTo("parentUid", profile.userId).snapshots()
+                .catch { handleFirestoreError(it as? Exception ?: Exception(it), OperationType.LIST, "leave_requests") }
+                .collectLatest { qs ->
+                    val items = qs.documents.mapNotNull { it.toLeaveRequest() }
+                    if (items.isNotEmpty()) {
+                        localDb.leaveRequestDao().insertLeaveRequests(items)
+                    }
+                }
         }
 
         for (studentId in profile.linkedStudentIds) {
@@ -829,6 +907,14 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
         cleanup.clearAllClasses()
         if (classes.isNotEmpty()) localDb.classDao().insertClasses(classes)
 
+        val dirSnap = runCatching { db.collection("academies").document(ACADEMY_ID).get().await() }.getOrNull()
+        val dirExamIds = dirSnap?.takeIf { it.exists() }?.getStringList("examIds") ?: emptyList()
+        val childExams = dirExamIds.mapNotNull { exId ->
+            runCatching { db.collection("exams").document(sanitizeId(exId)).get().await().toAcademyExam() }.getOrNull()
+        }.filter { it.classId in classIds }
+        cleanup.clearAllExams()
+        if (childExams.isNotEmpty()) localDb.examDao().insertExams(childExams)
+
         syncStudentIndexedRecords(studentSnaps, includeBilling = true, localDb = localDb)
     }
 
@@ -840,6 +926,10 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
         val cleanup = localDb.syncCleanupDao()
         val attIds = studentSnaps.flatMap { it.getStringList("recentAttendanceIds") }.distinct()
         val progIds = studentSnaps.flatMap { it.getStringList("recentProgressIds") }.distinct()
+        val namazIds = studentSnaps.flatMap { it.getStringList("recentNamazIds") }.distinct()
+        val qaidaIds = studentSnaps.flatMap { it.getStringList("recentQaidaIds") }.distinct()
+        val leaveIds = studentSnaps.flatMap { it.getStringList("recentLeaveIds") }.distinct()
+        val markIds = studentSnaps.flatMap { it.getStringList("recentExamMarkIds") }.distinct()
 
         val attRecords = attIds.mapNotNull { id ->
             runCatching { db.collection("attendance").document(id).get().await().toAttendanceRecord() }.getOrNull()
@@ -852,6 +942,30 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
         }
         cleanup.clearAllProgress()
         if (progRecords.isNotEmpty()) localDb.quranProgressDao().insertProgressList(progRecords)
+
+        val namazRecords = namazIds.mapNotNull { id ->
+            runCatching { db.collection("namaz_logs").document(id).get().await().toNamazLogRecord() }.getOrNull()
+        }
+        cleanup.clearAllNamazLogs()
+        if (namazRecords.isNotEmpty()) localDb.namazLogDao().insertNamazLogs(namazRecords)
+
+        val qaidaRecords = qaidaIds.mapNotNull { id ->
+            runCatching { db.collection("madni_qaida_logs").document(id).get().await().toMadniQaidaLogRecord() }.getOrNull()
+        }
+        cleanup.clearAllQaidaLogs()
+        if (qaidaRecords.isNotEmpty()) localDb.madniQaidaLogDao().insertQaidaLogs(qaidaRecords)
+
+        val leaveRecords = leaveIds.mapNotNull { id ->
+            runCatching { db.collection("leave_requests").document(id).get().await().toLeaveRequest() }.getOrNull()
+        }
+        cleanup.clearAllLeaveRequests()
+        if (leaveRecords.isNotEmpty()) localDb.leaveRequestDao().insertLeaveRequests(leaveRecords)
+
+        val examMarkRecords = markIds.mapNotNull { id ->
+            runCatching { db.collection("exam_marks").document(id).get().await().toExamMarkRecord() }.getOrNull()
+        }
+        cleanup.clearAllExamMarks()
+        if (examMarkRecords.isNotEmpty()) localDb.examMarkDao().insertMarks(examMarkRecords)
 
         if (includeBilling) {
             val chIds = studentSnaps.flatMap { it.getStringList("recentChallanIds") }.distinct()
@@ -1020,8 +1134,12 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
             val oldClassId = existing.takeIf { it.exists() }?.getString("classId")
             val attIds = if (existing.exists()) existing.getStringList("recentAttendanceIds") else emptyList()
             val progIds = if (existing.exists()) existing.getStringList("recentProgressIds") else emptyList()
+            val namazIds = if (existing.exists()) existing.getStringList("recentNamazIds") else emptyList()
+            val qaidaIds = if (existing.exists()) existing.getStringList("recentQaidaIds") else emptyList()
+            val leaveIds = if (existing.exists()) existing.getStringList("recentLeaveIds") else emptyList()
             val chIds = if (existing.exists()) existing.getStringList("recentChallanIds") else emptyList()
             val payIds = if (existing.exists()) existing.getStringList("recentPaymentIds") else emptyList()
+            val markIds = if (existing.exists()) existing.getStringList("recentExamMarkIds") else emptyList()
             val createdAt = existing.takeIf { it.exists() }?.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
 
             ref.set(
@@ -1030,8 +1148,12 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
                     adminUid,
                     attIds,
                     progIds,
+                    namazIds,
+                    qaidaIds,
+                    leaveIds,
                     chIds,
                     payIds,
+                    markIds,
                     createdAt
                 )
             ).await()
@@ -1062,11 +1184,23 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
                 for (pid in snap.getStringList("recentProgressIds")) {
                     runCatching { db.collection("quran_progress").document(pid).delete().await() }
                 }
+                for (nid in snap.getStringList("recentNamazIds")) {
+                    runCatching { db.collection("namaz_logs").document(nid).delete().await() }
+                }
+                for (qid in snap.getStringList("recentQaidaIds")) {
+                    runCatching { db.collection("madni_qaida_logs").document(qid).delete().await() }
+                }
+                for (lid in snap.getStringList("recentLeaveIds")) {
+                    runCatching { db.collection("leave_requests").document(lid).delete().await() }
+                }
                 for (payId in snap.getStringList("recentPaymentIds")) {
                     runCatching { db.collection("fee_payments").document(payId).delete().await() }
                 }
                 for (chId in snap.getStringList("recentChallanIds")) {
                     runCatching { db.collection("fee_challans").document(chId).delete().await() }
+                }
+                for (mkId in snap.getStringList("recentExamMarkIds")) {
+                    runCatching { db.collection("exam_marks").document(mkId).delete().await() }
                 }
                 runCatching { db.collection("fs_records").document("fs_$sid").delete().await() }
                 studentRef.delete().await()
@@ -1220,6 +1354,241 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.DELETE, progRef.path)
+            throw e
+        }
+    }
+
+    suspend fun upsertNamazLogCloud(record: NamazLogRecord, classId: String, callerUid: String) {
+        val adminUid = resolveAcademyAdminUid(callerUid)
+        val sid = sanitizeId(record.studentId)
+        val lid = sanitizeId(record.id)
+        val logRef = db.collection("namaz_logs").document(lid)
+        try {
+            val existing = runCatching { logRef.get().await() }.getOrNull()
+            val createdAt = existing?.takeIf { it.exists() }
+                ?.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val effectiveAdminUid = existing?.takeIf { it.exists() }?.getString("adminUid")?.takeIf { it.isNotBlank() } ?: adminUid
+            val effectiveClassId = existing?.takeIf { it.exists() }?.getString("classId")?.takeIf { it.isNotBlank() } ?: classId
+
+            logRef.set(
+                FirestoreCloudMappers.buildNamazLogPayload(
+                    record.copy(id = lid, studentId = sid),
+                    effectiveClassId,
+                    effectiveAdminUid,
+                    createdAt
+                )
+            ).await()
+            if (existing == null || !existing.exists()) {
+                val studRef = db.collection("students").document(sid)
+                val studSnap = studRef.get().await()
+                if (studSnap.exists()) {
+                    val updatedList = (listOf(lid) + studSnap.getStringList("recentNamazIds"))
+                        .distinct()
+                        .take(30)
+                    studRef.update(
+                        mapOf(
+                            "recentNamazIds" to updatedList,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, logRef.path)
+            throw e
+        }
+    }
+
+    suspend fun deleteNamazLogCloud(logId: String, studentId: String) {
+        val lid = sanitizeId(logId)
+        val sid = sanitizeId(studentId)
+        val logRef = db.collection("namaz_logs").document(lid)
+        try {
+            logRef.delete().await()
+            val studRef = db.collection("students").document(sid)
+            val studSnap = runCatching { studRef.get().await() }.getOrNull()
+            if (studSnap != null && studSnap.exists()) {
+                val updatedList = studSnap.getStringList("recentNamazIds").filter { it != lid }
+                studRef.update(
+                    mapOf(
+                        "recentNamazIds" to updatedList,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, logRef.path)
+            throw e
+        }
+    }
+
+    suspend fun upsertMadniQaidaLogCloud(record: MadniQaidaLogRecord, classId: String, callerUid: String) {
+        val adminUid = resolveAcademyAdminUid(callerUid)
+        val sid = sanitizeId(record.studentId)
+        val lid = sanitizeId(record.id)
+        val logRef = db.collection("madni_qaida_logs").document(lid)
+        try {
+            val existing = runCatching { logRef.get().await() }.getOrNull()
+            val createdAt = existing?.takeIf { it.exists() }
+                ?.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            val effectiveAdminUid = existing?.takeIf { it.exists() }?.getString("adminUid")?.takeIf { it.isNotBlank() } ?: adminUid
+            val effectiveClassId = existing?.takeIf { it.exists() }?.getString("classId")?.takeIf { it.isNotBlank() } ?: classId
+
+            logRef.set(
+                FirestoreCloudMappers.buildMadniQaidaLogPayload(
+                    record.copy(id = lid, studentId = sid),
+                    effectiveClassId,
+                    effectiveAdminUid,
+                    createdAt
+                )
+            ).await()
+            if (existing == null || !existing.exists()) {
+                val studRef = db.collection("students").document(sid)
+                val studSnap = studRef.get().await()
+                if (studSnap.exists()) {
+                    val updatedList = (listOf(lid) + studSnap.getStringList("recentQaidaIds"))
+                        .distinct()
+                        .take(30)
+                    studRef.update(
+                        mapOf(
+                            "recentQaidaIds" to updatedList,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, logRef.path)
+            throw e
+        }
+    }
+
+    suspend fun deleteMadniQaidaLogCloud(logId: String, studentId: String) {
+        val lid = sanitizeId(logId)
+        val sid = sanitizeId(studentId)
+        val logRef = db.collection("madni_qaida_logs").document(lid)
+        try {
+            logRef.delete().await()
+            val studRef = db.collection("students").document(sid)
+            val studSnap = runCatching { studRef.get().await() }.getOrNull()
+            if (studSnap != null && studSnap.exists()) {
+                val updatedList = studSnap.getStringList("recentQaidaIds").filter { it != lid }
+                studRef.update(
+                    mapOf(
+                        "recentQaidaIds" to updatedList,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, logRef.path)
+            throw e
+        }
+    }
+
+    suspend fun submitLeaveRequestCloud(request: LeaveRequest, callerUid: String): LeaveRequest {
+        val adminUid = resolveAcademyAdminUid(callerUid)
+        val sid = sanitizeId(request.studentId)
+        val lid = sanitizeId(request.id)
+        val leaveRef = db.collection("leave_requests").document(lid)
+        val effectiveRequest = request.copy(
+            id = lid,
+            studentId = sid,
+            parentUid = request.parentUid.ifBlank { callerUid },
+            status = ApprovalStatus.PENDING,
+            reviewerName = "",
+            reviewerRole = "",
+            reviewedDate = "",
+            reviewerRemarks = ""
+        )
+        try {
+            leaveRef.set(
+                FirestoreCloudMappers.buildLeaveRequestPayload(effectiveRequest, adminUid)
+            ).await()
+
+            val studRef = db.collection("students").document(sid)
+            val studSnap = runCatching { studRef.get().await() }.getOrNull()
+            if (studSnap != null && studSnap.exists()) {
+                val updatedList = (listOf(lid) + studSnap.getStringList("recentLeaveIds"))
+                    .distinct()
+                    .take(24)
+                studRef.update(
+                    mapOf(
+                        "recentLeaveIds" to updatedList,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+            return effectiveRequest
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, leaveRef.path)
+            throw e
+        }
+    }
+
+    suspend fun reviewLeaveRequestCloud(
+        leaveId: String,
+        approved: Boolean,
+        reviewerName: String,
+        reviewerRole: String,
+        reviewedDate: String,
+        reviewerRemarks: String
+    ) {
+        val lid = sanitizeId(leaveId)
+        val leaveRef = db.collection("leave_requests").document(lid)
+        val statusStr = if (approved) ApprovalStatus.APPROVED.name else ApprovalStatus.REJECTED.name
+        try {
+            leaveRef.update(
+                mapOf(
+                    "status" to statusStr,
+                    "reviewerName" to reviewerName.take(120).ifBlank { "Reviewer" },
+                    "reviewerRole" to reviewerRole.take(30).ifBlank { "ADMIN" },
+                    "reviewedDate" to reviewedDate.take(25),
+                    "reviewerRemarks" to reviewerRemarks.trim().take(350),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, leaveRef.path)
+            throw e
+        }
+    }
+
+    suspend fun deleteLeaveRequestCloud(leaveId: String, studentId: String) {
+        val lid = sanitizeId(leaveId)
+        val sid = sanitizeId(studentId)
+        val leaveRef = db.collection("leave_requests").document(lid)
+        try {
+            leaveRef.delete().await()
+            val studRef = db.collection("students").document(sid)
+            val studSnap = runCatching { studRef.get().await() }.getOrNull()
+            if (studSnap != null && studSnap.exists()) {
+                val existingList = studSnap.getStringList("recentLeaveIds")
+                if (lid in existingList) {
+                    studRef.update(
+                        mapOf(
+                            "recentLeaveIds" to existingList.filter { it != lid },
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, leaveRef.path)
             throw e
         }
     }
@@ -1490,6 +1859,148 @@ class FirestoreCloudRepository(private val db: FirebaseFirestore) {
         try {
             ref.delete().await()
             removeIdFromAcademyDirectory("announcementIds", annId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, ref.path)
+            throw e
+        }
+    }
+
+    suspend fun upsertExamCloud(exam: AcademyExam, adminUid: String) {
+        val exId = sanitizeId(exam.id)
+        val ref = db.collection("exams").document(exId)
+        try {
+            val existing = runCatching { ref.get().await() }.getOrNull()
+            val createdAt = existing?.takeIf { it.exists() }
+                ?.getTimestamp("createdAt", DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            ref.set(FirestoreCloudMappers.buildExamPayload(exam.copy(id = exId), adminUid, createdAt)).await()
+            appendIdToAcademyDirectory("examIds", exId, 200)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, ref.path)
+            throw e
+        }
+    }
+
+    suspend fun deleteExamCloud(examId: String, linkedMarks: List<ExamMarkRecord>) {
+        val exId = sanitizeId(examId)
+        val ref = db.collection("exams").document(exId)
+        try {
+            for (mk in linkedMarks) {
+                val mkId = sanitizeId(mk.id)
+                val sid = sanitizeId(mk.studentId)
+                runCatching { db.collection("exam_marks").document(mkId).delete().await() }
+                val studRef = db.collection("students").document(sid)
+                val studSnap = runCatching { studRef.get().await() }.getOrNull()
+                if (studSnap != null && studSnap.exists()) {
+                    val existingIds = studSnap.getStringList("recentExamMarkIds")
+                    if (mkId in existingIds) {
+                        runCatching {
+                            studRef.update(
+                                mapOf(
+                                    "recentExamMarkIds" to existingIds.filter { it != mkId },
+                                    "updatedAt" to FieldValue.serverTimestamp()
+                                )
+                            ).await()
+                        }
+                    }
+                }
+            }
+            ref.delete().await()
+            removeIdFromAcademyDirectory("examIds", exId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, ref.path)
+            throw e
+        }
+    }
+
+    suspend fun upsertExamMarkCloud(mark: ExamMarkRecord, callerUid: String) {
+        val adminUid = resolveAcademyAdminUid(callerUid)
+        val mkId = sanitizeId(mark.id)
+        val sid = sanitizeId(mark.studentId)
+        val exId = sanitizeId(mark.examId)
+        val cid = sanitizeId(mark.classId)
+        val ref = db.collection("exam_marks").document(mkId)
+        try {
+            val existing = runCatching { ref.get().await() }.getOrNull()
+            val total = mark.totalMarks.coerceIn(1.0, 1000.0)
+            val passing = mark.passingMarks.coerceIn(0.0, total)
+            val obtained = if (mark.isAbsent) 0.0 else mark.obtainedMarks.coerceIn(0.0, total)
+            val computedGrade = mark.grade.ifBlank {
+                ExamGradeHelper.computeGrade(obtained, total, passing, mark.isAbsent)
+            }
+
+            if (existing != null && existing.exists()) {
+                // Use restricted update field set so both Admin & Assigned Teacher pass security rules cleanly
+                ref.update(
+                    mapOf(
+                        "obtainedMarks" to obtained,
+                        "grade" to computedGrade.take(40),
+                        "isAbsent" to mark.isAbsent,
+                        "remarks" to mark.remarks.trim().take(300),
+                        "gradedByTeacherId" to mark.gradedByTeacherId.take(128).ifBlank { "Teacher" },
+                        "gradedByTeacherName" to mark.gradedByTeacherName.take(120).ifBlank { "Academy Ustad" },
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            } else {
+                val normalized = mark.copy(
+                    id = mkId,
+                    examId = exId,
+                    studentId = sid,
+                    classId = cid,
+                    obtainedMarks = obtained,
+                    totalMarks = total,
+                    passingMarks = passing,
+                    grade = computedGrade
+                )
+                ref.set(FirestoreCloudMappers.buildExamMarkPayload(normalized, adminUid)).await()
+            }
+
+            val studRef = db.collection("students").document(sid)
+            val studSnap = runCatching { studRef.get().await() }.getOrNull()
+            if (studSnap != null && studSnap.exists()) {
+                val updatedIds = (listOf(mkId) + studSnap.getStringList("recentExamMarkIds"))
+                    .distinct()
+                    .take(60)
+                studRef.update(
+                    mapOf(
+                        "recentExamMarkIds" to updatedIds,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, ref.path)
+            throw e
+        }
+    }
+
+    suspend fun deleteExamMarkCloud(markId: String, studentId: String) {
+        val mkId = sanitizeId(markId)
+        val sid = sanitizeId(studentId)
+        val ref = db.collection("exam_marks").document(mkId)
+        try {
+            ref.delete().await()
+            val studRef = db.collection("students").document(sid)
+            val studSnap = runCatching { studRef.get().await() }.getOrNull()
+            if (studSnap != null && studSnap.exists()) {
+                val existingIds = studSnap.getStringList("recentExamMarkIds")
+                if (mkId in existingIds) {
+                    studRef.update(
+                        mapOf(
+                            "recentExamMarkIds" to existingIds.filter { it != mkId },
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
